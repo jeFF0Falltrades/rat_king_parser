@@ -1,0 +1,3 @@
+cryptography
+dotnetfile
+yara-python
