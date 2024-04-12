@@ -34,6 +34,7 @@ from .utils.dotnetpe_payload import DotNetPEPayload
 from .utils.config_aes_decryptor import ConfigAESDecryptor
 from .utils.config_parser_exception import ConfigParserException
 from logging import getLogger
+from os.path import isfile
 from re import DOTALL, search
 
 logger = getLogger(__name__)
@@ -51,12 +52,40 @@ class RATConfigParser:
         rb"(?:\x7e.{3}\x04(?:\x6f.{3}\x0a){2}\x74.{3}\x01.+?\x2a.+?\x00{6,})"
     )
 
-    def __init__(self, file_path):
-        self.dnpp = DotNetPEPayload(file_path)
-        self.aes_decryptor = None  # Created in decrypt_and_decode_config()
-        self.config = {}
-        self.encrypted_config = self.get_encrypted_config()
-        self.decrypt_and_decode_config()
+    def __init__(self, file_path, yara_rule=None):
+        self.report = {
+            "file_path": file_path,
+            "sha256": "",
+            "possible_yara_family": "",
+            "aes_key": "",
+            "aes_salt": "",
+            "config": {},
+        }
+        try:
+            if not isfile(file_path):
+                raise Exception("File not found")
+            self.dnpp = DotNetPEPayload(file_path, yara_rule)
+            self.report["sha256"] = self.dnpp.sha256
+            self.report["possible_yara_family"] = self.dnpp.yara_match
+            if self.dnpp.dotnetpe is None:
+                raise ConfigParserException(
+                    f"Failed to load {file_path} as .NET executable"
+                )
+            self.aes_decryptor = None  # Created in decrypt_and_decode_config()
+            self.encrypted_config = self.get_encrypted_config()
+            self.decrypt_and_decode_config()
+            self.report["aes_key"] = (
+                self.aes_decryptor.key.hex()
+                if self.aes_decryptor.key is not None
+                else "None"
+            )
+            self.report["aes_salt"] = (
+                self.aes_decryptor.salt.hex()
+                if self.aes_decryptor is not None
+                else "None"
+            )
+        except Exception as e:
+            self.report["config"] = f"Exception encountered for {file_path}: {e}"
 
     # Decrypts/decodes values from an encrypted config
     def decrypt_and_decode_config(self):
@@ -69,7 +98,7 @@ class RATConfigParser:
                 # Decrypt the values
                 self.aes_decryptor = ConfigAESDecryptor(self.dnpp, item_data)
                 item_data = self.aes_decryptor.decrypt_encrypted_strings()
-            self.config.update(item_data)
+            self.report["config"].update(item_data)
         # Translate field name RVAs to string values
         self.translate_config_field_names()
 
@@ -94,22 +123,8 @@ class RATConfigParser:
     # name strings (this is done last to preserve config ordering)
     def translate_config_field_names(self):
         translated_config = {}
-        for field_rva, field_value in sorted(self.config.items()):
+        for field_rva, field_value in sorted(self.report["config"].items()):
             key = self.dnpp.field_name_from_rva(field_rva)
             translated_config[key] = field_value
             logger.debug(f"Config item parsed {key}: {field_value}")
-        self.config = translated_config
-
-    # Returns the metadata and the decrypted configuration for a payload
-    def report(self):
-        result_dict = {
-            "file_path": self.dnpp.file_path,
-            "aes_key": self.aes_decryptor.key.hex()
-            if self.aes_decryptor.key is not None
-            else "None",
-            "aes_salt": self.aes_decryptor.salt.hex()
-            if self.aes_decryptor is not None
-            else "None",
-            "config": self.config,
-        }
-        return result_dict
+        self.report["config"] = translated_config

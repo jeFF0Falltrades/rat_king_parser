@@ -78,6 +78,10 @@ $ python rat_king_parser.py ../malz/* | python -m json.tool
 [
   {
     "file_path": "../malz/asyncrat_blank.exe",
+    "sha256": "0e19cefba973323c234322452dfd04e318f14809375090b4f6ab39282f6ba07e",
+    "possible_yara_family": "asyncrat",
+    "aes_key": "None",
+    "aes_salt": "bfeb1e56fbcd973bb219022430a57843003d5644d21e62b9d4f180e7e6c33941",
     "config": {
       "Ports": "%Ports%",
       "Hosts": "%Hosts%",
@@ -94,13 +98,14 @@ $ python rat_king_parser.py ../malz/* | python -m json.tool
       "BDOS": "%BDOS%",
       "Delay": "%Delay%",
       "Group": "%Group%"
-    },
-    "yara_possible_family": "asyncrat",
-    "aes_key": "None",
-    "aes_salt": "bfeb1e56fbcd973bb219022430a57843003d5644d21e62b9d4f180e7e6c33941"
+    }
   },
   {
     "file_path": "../malz/asyncrat_encrypted.exe",
+    "sha256": "6b99acfa5961591c39b3f889cf29970c1dd48ddb0e274f14317940cf279a4412",
+    "possible_yara_family": "asyncrat",
+    "aes_key": "eebdb6b2b00c2501b7b246442a354c5c3d743346e4cc88896ce68485dd6bbb8f",
+    "aes_salt": "bfeb1e56fbcd973bb219022430a57843003d5644d21e62b9d4f180e7e6c33941",
     "config": {
       "Ports": "2400",
       "Hosts": "minecraftdayzserver.ddns.net",
@@ -117,13 +122,14 @@ $ python rat_king_parser.py ../malz/* | python -m json.tool
       "BDOS": "false",
       "Delay": "3",
       "Group": "Default"
-    },
-    "yara_possible_family": "asyncrat",
-    "aes_key": "eebdb6b2b00c2501b7b246442a354c5c3d743346e4cc88896ce68485dd6bbb8f",
-    "aes_salt": "bfeb1e56fbcd973bb219022430a57843003d5644d21e62b9d4f180e7e6c33941"
+    }
   },
   {
     "file_path": "../malz/dcrat2.exe",
+    "sha256": "034941c1ea1b1ae32a653aab6371f760dfc4fc43db7c7bf07ac10fc9e98c849e",
+    "possible_yara_family": "dcrat",
+    "aes_key": "3915b12d862a41cce3da2e11ca8cefc26116d0741c23c0748618add80ee31a5c",
+    "aes_salt": "4463526174427971777164616e6368756e",
     "config": {
       "Por_ts": "2525",
       "Hos_ts": "20.200.63.2",
@@ -141,13 +147,14 @@ $ python rat_king_parser.py ../malz/* | python -m json.tool
       "Group": "16JUNIO-PJOAO",
       "Anti_Process": "false",
       "An_ti": "false"
-    },
-    "yara_possible_family": "dcrat",
-    "aes_key": "3915b12d862a41cce3da2e11ca8cefc26116d0741c23c0748618add80ee31a5c",
-    "aes_salt": "4463526174427971777164616e6368756e"
+    }
   },
   {
     "file_path": "../malz/quasarrat.exe",
+    "sha256": "a76af3d67a95a22efd83d016c9142b7ac9974068625516de23e77a5ac3dd051b",
+    "possible_yara_family": "quasarrat",
+    "aes_key": "b30cea630f7fac6c2e066ce7f29e1b4bab548ee95b20ff6aa7387ce14df5dc30",
+    "aes_salt": "bfeb1e56fbcd973bb219022430a57843003d5644d21e62b9d4f180e7e6c33941",
     "config": {
       "\u5bd8\ue8b1\u8902\u4ab3\ue28f\ua5c9\u9297\ufffd\ua748\u954b\u5801\uccda\u71f1\u7314\u754f\u2036\ud518\u34c4\u0bd2\uabfc": "1.4.1",
       "\ubd74\ua2b2\u88b9\uf912\u680a\u6e1c\u9c57\ufffd\u7f1d\ufa03\uad9d\uefae\uede0\u9540\u0199\uead7\u8879\u6442\u4d27\uc296": "10.0.0.61:4782;24.67.68.3:4782;",
@@ -171,13 +178,14 @@ $ python rat_king_parser.py ../malz/* | python -m json.tool
       "\ub27b\ud270\ufffd\u355e\u1622\u7519\u9d96\u7364\uc9d0\u1fde\u52a9\uba41\u1e31\u6312\u8c77\u2adf\u168a\ub8ea\u6141\u6a1f": "",
       "\uebb2\u4c72\uf95a\ufffd\ufffd\ua787\u4955\u9b1b\ufffd\u884c\ufcc4\ue409\u5744\ub527\u981c\ue9ca\ucb25\u79b8\u7ada\u23fa": "",
       "\u5254\u58f4\u661a\ucf1c\ua701\uea1d\u2f73\u5f72\u61d4\u5da5\u9863\u785d\u82b9\u6196\u9e96\uf4a6\u6ee1\u5883\ua878\uf173": true
-    },
-    "yara_possible_family": "quasarrat",
-    "aes_key": "b30cea630f7fac6c2e066ce7f29e1b4bab548ee95b20ff6aa7387ce14df5dc30",
-    "aes_salt": "bfeb1e56fbcd973bb219022430a57843003d5644d21e62b9d4f180e7e6c33941"
+    }
   },
   {
     "file_path": "../malz/venom64.exe",
+    "sha256": "db09db5bdf1dcf6e607936a6abbe5ce91efbbf9ce136efc3bdb45222710792fa",
+    "possible_yara_family": "venomrat",
+    "aes_key": "11ed70df5ce22de750c6e7496fa5c51985c321d2d9dd463979337af003644f41",
+    "aes_salt": "56656e6f6d524154427956656e6f6d",
     "config": {
       "Por_ts": "4449,7772",
       "Hos_ts": "127.0.0.1",
@@ -196,13 +204,14 @@ $ python rat_king_parser.py ../malz/* | python -m json.tool
       "Group": "Default",
       "Anti_Process": "false",
       "An_ti": "false"
-    },
-    "yara_possible_family": "venomrat",
-    "aes_key": "11ed70df5ce22de750c6e7496fa5c51985c321d2d9dd463979337af003644f41",
-    "aes_salt": "56656e6f6d524154427956656e6f6d"
+    }
   },
   {
     "file_path": "../malz/venomrat.exe",
+    "sha256": "9bfed30be017e62e482a8792fb643a0ca4fa22167e4b239cde37b70db241f2c4",
+    "possible_yara_family": "venomrat",
+    "aes_key": "86cfd98ca989924e7a9439902dc6a72e315da09c11b100c39cd59b9c9372b192",
+    "aes_salt": "56656e6f6d524154427956656e6f6d",
     "config": {
       "Por_ts": "4449",
       "Hos_ts": "127.0.0.1",
@@ -221,10 +230,7 @@ $ python rat_king_parser.py ../malz/* | python -m json.tool
       "Group": "Default",
       "Anti_Process": "false",
       "An_ti": "true"
-    },
-    "yara_possible_family": "venomrat",
-    "aes_key": "86cfd98ca989924e7a9439902dc6a72e315da09c11b100c39cd59b9c9372b192",
-    "aes_salt": "56656e6f6d524154427956656e6f6d"
+    }
   }
 ]
 ```
@@ -241,5 +247,5 @@ Thank you!
 
 The logo for this project contains modifications of the following images:
 
-- Ouroboros - Image by Freepik - https://www.freepik.com/free-vector/ouroboros-symbol-illustration_37368320.htm
+- Ouroboros (modified) - Image by Freepik - https://www.freepik.com/free-vector/ouroboros-symbol-illustration_37368320.htm
 - Rat King Illustration (modified) - User:Di (they-them), CC BY 4.0 <https://creativecommons.org/licenses/by/4.0>, via Wikimedia Commons - https://commons.wikimedia.org/wiki/File:Rat_King_Illustration.svg
