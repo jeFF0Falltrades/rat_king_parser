@@ -42,7 +42,6 @@ from config_parser import RATConfigParser
 from itertools import repeat
 from json import dumps
 from logging import basicConfig, DEBUG, getLogger, WARNING
-from os.path import isfile
 from pathlib import Path
 from yara import load
 from yara_rules.recompile import recompile
@@ -91,22 +90,9 @@ def parse_args():
 def parse_config(fp, debug, yara_rule_path):
     # Since we are utilizing multiprocessing, set up logging once per child
     basicConfig(level=DEBUG if debug else WARNING)
-    result = {"file_path": fp, "config": "", "yara_possible_family": ""}
-    try:
-        if not isfile(fp):
-            raise Exception("File not found")
-        result.update(RATConfigParser(fp).report())
-    except Exception as e:
-        logger.exception(e)
-        result["config"] = f"Exception encountered for {fp}: {e}"
-    try:
-        rule = load_yara(yara_rule_path)
-        match = rule.match(fp)
-        result["yara_possible_family"] = str(match[0]) if len(match) > 0 else "No match"
-    except Exception as e:
-        logger.exception(e)
-        result["yara_possible_family"] = f"Exception encountered: {e}"
-    return result
+    # YARA rule types cannot be pickled and must be instantiated per subprocess
+    rule = load_yara(yara_rule_path)
+    return RATConfigParser(fp, rule).report
 
 
 if __name__ == "__main__":

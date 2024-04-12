@@ -32,6 +32,7 @@ from .config_parser_exception import ConfigParserException
 from .data_utils import bytes_to_int
 from .dotnet_constants import RVA_STRINGS_BASE, RVA_US_BASE
 from dotnetfile import DotNetPE
+from hashlib import sha256
 from logging import getLogger
 from struct import pack
 
@@ -39,13 +40,27 @@ logger = getLogger(__name__)
 
 
 class DotNetPEPayload:
-    def __init__(self, file_path):
+    def __init__(self, file_path, yara_rule=None):
         self.file_path = file_path
         self.data = self.get_file_data()
-        self.dotnetpe = DotNetPE(self.file_path)
-        self.text_section_rva, self.text_section_offset = (
-            self.get_text_section_rva_offset()
-        )
+        self.sha256 = self.calculate_sha256()
+        self.dotnetpe = None
+        try:
+            self.dotnetpe = DotNetPE(self.file_path)
+        except Exception as e:
+            logger.exception(e)
+        self.yara_match = ""
+        if yara_rule is not None:
+            self.yara_match = self.match_yara(yara_rule)
+        if self.dotnetpe is not None:
+            self.text_section_rva, self.text_section_offset = (
+                self.get_text_section_rva_offset()
+            )
+
+    def calculate_sha256(self):
+        sha256_hash = sha256()
+        sha256_hash.update(self.data)
+        return sha256_hash.hexdigest()
 
     # Given an RVA, derives the corresponding Field name from the RVA
     def field_name_from_rva(self, rva):
@@ -94,6 +109,14 @@ class DotNetPEPayload:
             ]
         )
         return text_section_rva, text_section_offset
+
+    def match_yara(self, rule):
+        try:
+            match = rule.match(self.file_path)
+            return str(match[0]) if len(match) > 0 else "No match"
+        except Exception as e:
+            logger.exception(e)
+            return f"Exception encountered: {e}"
 
     # Given the offset to an instruction, reverses the instruction to its
     # parent Method, and then finds the subsequent Method in the MethodDef
