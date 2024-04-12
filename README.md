@@ -1,3 +1,5 @@
+![rat_king_parser logo](https://raw.githubusercontent.com/jeFF0Falltrades/rat_king_parser/master/.github/logo.png)
+
 # Rat King Configuration Parser
 
 A robust, multiprocessing-capable, multi-family RAT config parser/extractor for AsyncRAT, DcRAT, VenomRAT, QuasarRAT, and cloned/derivative RAT families.
@@ -234,3 +236,10 @@ If you have suggestions for improvement, bugs, feedback, or additional RAT famil
 Also, if this tool or video tutorial was helpful to you, that's always nice to hear as well!
 
 Thank you!
+
+## Logo Attribution
+
+The logo for this project contains modifications of the following images:
+
+- Ouroboros - Image by Freepik - https://www.freepik.com/free-vector/ouroboros-symbol-illustration_37368320.htm
+- Rat King Illustration (modified) - User:Di (they-them), CC BY 4.0 <https://creativecommons.org/licenses/by/4.0>, via Wikimedia Commons - https://commons.wikimedia.org/wiki/File:Rat_King_Illustration.svg
