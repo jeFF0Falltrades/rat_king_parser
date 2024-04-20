@@ -29,12 +29,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 from .config_parser_exception import ConfigParserException
-from .data_utils import bytes_to_int
-from .dotnet_constants import RVA_STRINGS_BASE, RVA_US_BASE
-from dotnetfile import DotNetPE
+from .dotnet_constants import MDT_FIELD_DEF, MDT_STRING
+from dnfile import dnPE
 from hashlib import sha256
 from logging import getLogger
-from struct import pack
 
 logger = getLogger(__name__)
 
@@ -46,17 +44,14 @@ class DotNetPEPayload:
         self.sha256 = self.calculate_sha256()
         self.dotnetpe = None
         try:
-            self.dotnetpe = DotNetPE(self.file_path)
+            self.dotnetpe = dnPE(self.file_path, clr_lazy_load=True)
         except Exception as e:
             logger.exception(e)
         self.yara_match = ""
         if yara_rule is not None:
             self.yara_match = self.match_yara(yara_rule)
-        if self.dotnetpe is not None:
-            self.text_section_rva, self.text_section_offset = (
-                self.get_text_section_rva_offset()
-            )
 
+    # Calculates the SHA256 hash of file data
     def calculate_sha256(self):
         sha256_hash = sha256()
         sha256_hash.update(self.data)
@@ -64,19 +59,16 @@ class DotNetPEPayload:
 
     # Given an RVA, derives the corresponding Field name from the RVA
     def field_name_from_rva(self, rva):
-        field_addr = bytes_to_int(
-            self.dotnetpe.metadata_tables_lookup["Field"]
-            .table_rows[rva - RVA_STRINGS_BASE - 1]
-            .Name._BinaryStructureField__value_bytes
-        )
-        return self.dotnetpe.get_string(field_addr)
+        return self.dotnetpe.net.mdtables.Field.rows[
+            (rva ^ MDT_FIELD_DEF) - 1
+        ].Name.value
 
     # Given an RVA, derives the corresponding FieldRVA value from the RVA
     def fieldrva_from_rva(self, rva):
-        field_id = pack("<H", rva - RVA_STRINGS_BASE)
-        for row in self.dotnetpe.metadata_tables_lookup["FieldRVA"].table_rows:
-            if row.Field._BinaryStructureField__value_bytes == field_id:
-                return bytes_to_int(row.RVA._BinaryStructureField__value_bytes)
+        field_id = rva ^ MDT_FIELD_DEF
+        for row in self.dotnetpe.net.mdtables.FieldRva:
+            if row.struct.Field_Index == field_id:
+                return row.struct.Rva
         raise ConfigParserException(f"Could not find FieldRVA for address {rva}")
 
     # Reads in payload binary content
@@ -92,24 +84,7 @@ class DotNetPEPayload:
         logger.debug("Successfully read data")
         return data
 
-    # Returns the RVA and offset of the .text section of the payload, which are
-    # both used in RVA/offset translations
-    def get_text_section_rva_offset(self):
-        text_section_metadata_offset = self.data.find(b".text")
-        if text_section_metadata_offset == -1:
-            raise ConfigParserException("Could not identify .text section metadata")
-        text_section_rva = bytes_to_int(
-            self.data[
-                text_section_metadata_offset + 12 : text_section_metadata_offset + 16
-            ]
-        )
-        text_section_offset = bytes_to_int(
-            self.data[
-                text_section_metadata_offset + 20 : text_section_metadata_offset + 24
-            ]
-        )
-        return text_section_rva, text_section_offset
-
+    # Tests a given YARA rule object against the file at file_path
     def match_yara(self, rule):
         try:
             match = rule.match(self.file_path)
@@ -122,30 +97,17 @@ class DotNetPEPayload:
     # parent Method, and then finds the subsequent Method in the MethodDef
     # table and returns its offset
     def next_method_offset_from_instruction_offset(self, ins_offset):
-        ins_rva = self.rva_from_offset(ins_offset)
-        for method in self.dotnetpe.metadata_tables_lookup["MethodDef"].table_rows:
-            method_rva = bytes_to_int(method.RVA._BinaryStructureField__value_bytes)
-            if method_rva > ins_rva:
-                return self.offset_from_rva(method_rva)
+        ins_rva = self.dotnetpe.get_rva_from_offset(ins_offset)
+        for method in self.dotnetpe.net.mdtables.MethodDef:
+            if method.Rva > ins_rva:
+                return self.offset_from_rva(method.Rva)
         raise ConfigParserException(
             f"Could not find next method from instruction offset {ins_offset}"
         )
 
-    # Given an RVA, calculates the data offset of the RVA by subtracting the
-    # relative virtual address of the .text section and adding the data offset
-    # of the .text section, e.g.
-    #
-    # RVA: 0x2050
-    # Text section RVA: 0x2000
-    # Text section data offset: 0x0200
-    # Field offset = 0x2050 - 0x2000 + 0x0200
-    #              = 0x0250
+    # Given an RVA, returns a data/file offset
     def offset_from_rva(self, rva):
-        return rva - self.text_section_rva + self.text_section_offset
-
-    # Inverse of offset_from_rva
-    def rva_from_offset(self, offset):
-        return offset + self.text_section_rva - self.text_section_offset
+        return self.dotnetpe.get_offset_from_rva(rva)
 
     # Given a string offset, and, optionally, a delimiter, extracts the string
     def string_from_offset(self, str_offset, delimiter=b"\0"):
@@ -159,4 +121,4 @@ class DotNetPEPayload:
 
     # Given an RVA, derives the corresponding User String
     def user_string_from_rva(self, rva):
-        return self.dotnetpe.get_user_string(rva - RVA_US_BASE)
+        return self.dotnetpe.net.user_strings.get(rva ^ MDT_STRING).value

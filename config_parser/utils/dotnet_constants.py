@@ -35,8 +35,8 @@ OPCODE_LDC_I4_1 = b"\x17"
 OPCODE_LDSTR = b"\x72"
 OPCODE_LDTOKEN = b"\xd0"
 OPCODE_RET = b"\x2a"
-RVA_STRINGS_BASE = 0x04000000
-RVA_US_BASE = 0x70000000
+MDT_FIELD_DEF = 0x04000000
+MDT_STRING = 0x70000000
 
 
 # IntEnum derivative used for translating a SpecialFolder ID to its name
