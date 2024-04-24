@@ -4,9 +4,9 @@
 
 A robust, multiprocessing-capable, multi-family RAT config parser/extractor for AsyncRAT, DcRAT, VenomRAT, QuasarRAT, and cloned/derivative RAT families.
 
-This configuration parser seeks to be "robust" in that it does not require the user to know the strain of RAT ahead of time; It simply looks for patterns of a common configuration module that is present in the above-mentioned RAT families as well as several clones and derivatives, parses and decrypts the config within that module, and uses YARA to suggest a possible strain for the payload.
+This configuration parser seeks to be "robust" in that it does not require the user to know the strain of RAT ahead of time; It simply looks for patterns of a common configuration module that is present in the above-mentioned RAT families (or performs a brute-force search for this config if these patterns are not found) as well as several clones and derivatives, parses and decrypts the config within that module, and uses YARA to suggest a possible strain for the payload.
 
-This method of detection and parsing is detailed in the accompanying YouTube code overview video here:
+The initial (non-brute-forcing) method of detection and parsing is detailed in the accompanying YouTube code overview video here:
 
 - https://www.youtube.com/watch?v=yoz44QKe_2o
 
@@ -76,6 +76,34 @@ $ python rat_king_parser.py ../malz/* | python -m json.tool
 
 ```json
 [
+  {
+    "file_path": "../malz/quasarrat_obfuscated.exe",
+    "sha256": "83892117f96867db66c1e6676822a4c0d6691cde60449ee47457f4cc31410fce",
+    "possible_yara_family": "quasarrat",
+    "aes_key": "ff230bfb57fecad4bd59d4d97f6883b4",
+    "aes_salt": "bfeb1e56fbcd973bb219022430a57843003d5644d21e62b9d4f180e7e6c33941",
+    "config": {
+      "\u68bd\u7568\u82be\u21fc\ubc94\u4a16\ua52d\u29ed\u3159\u2884\u71bc\ua7ff\u2f33\u1dcd\u782b\u1878\ua7ff\uffbc\u0d39\ue507": "1.3.0.0",
+      "\ua944\uee87\ucc65\u875d\u0fd9\u12f7\u444c\u2b5e\ue0e2\u2fd1\u399d\ueb76\u4712\u4598\u82d8\ua0e7\uc772\u36a5\u1844\u5aac": "qztadmin.duckdns.org:9782;",
+      "\u86b9\u562a\ua71f\uc023\uc4e1\u7232\u5284\u3ddf\u8011\uce0b\u03f6\ufffd\u0ae5\u1f42\u4cac\u3eb2\u91fa\u7f71\u606b\u1fd7": 3000,
+      "\u59f0\uebd3\ucb55\u9513\u0085\u6ee7\ua940\u681e\u4e2b\uac23\u6a76\u8b4c\u7ab4\u05ee\ua129\uf55c\uf000\u90aa\uf237\u1dfa": "1WvgEMPjdwfqIMeM9MclyQ==",
+      "\u03b1\u0425\u0247\u3089\ua076\ua115\u6429\u3006\u1b8d\ubf6d\u2a56\u89ae\u03d5\u9deb\ua766\uac88\u5c44\ub85a\uecbf\uc422": "NcFtjbDOcsw7Evd3coMC0y4koy/SRZGydhNmno81ZOWOvdfg7sv0Cj5ad2ROUfX4QMscAIjYJdjrrs41+qcQwg==",
+      "\uf248\ub9fb\u80fc\u41f8\ue537\uef74\ue9e3\ufcca\u34a1\u882f\uce63\u1c36\u21f7\u6549\u8b35\uc644\u702b\u18e3\u7a76\u0c39": "APPLICATIONDATA",
+      "\uf0ca\uec38\ub515\u6f29\ub7d9\u8939\ud375\u1b90\u8789\ub5cf\ud75b\u1169\u99d4\uc87e\u695d\ud335\uf8f4\u1ce6\ua50d\ud4e9": "SubDir",
+      "\u6964\ucfc4\u3115\u076e\u39b2\uff0f\u2ce1\u00c0\u9619\ue20f\u695e\u5abe\u2be5\u8236\u36bd\u4f95\ub109\u4720\u0d71\u80cd": "Client.exe",
+      "\ua9b6\u25ca\ua1d4\u3eba\uf365\u2afa\u9ec6\u22da\u3a7c\ufaef\uc86e\u746d\u7bdb\uc2e7\u791e\uf7cc\u16c2\uf1d7\u5375\u1803": false,
+      "\u96d2\ufd5a\ud468\u7e4f\ufffd\u5277\u1b2c\u2d6a\ufffd\uadef\uec19\uc8e5\u7fa2\ua287\u912c\u8b46\ue05c\u5c7f\u9758\u7ee0": false,
+      "\ubdc9\u0de2\uf126\u1b1a\u6764\u7fbe\u59e3\u7c7c\u43e4\u5362\uaea2\u9f15\ufffd\uc896\uf7bb\u2cac\ub54c\ubbe9\uabea\uce96": "QSR_MUTEX_YMblzlA3rm38L7nnxQ",
+      "\u6500\u3fd8\uc642\u3a4b\u139f\u44ff\u4554\ufffd\u062f\u5dde\ucbf2\ua008\u7ea7\u4007\ufffd\ufd0d\u54da\ua7ae\u5e52\uf347": "Quasar Client Startup",
+      "\u4791\u968c\u11c5\uf118\u6b09\u1148\ud085\ufa94\uebf7\u876c\u4782\u9f3f\u286e\ub03e\u925b\ucde1\uea63\u7f61\u8845\uc448": false,
+      "\u9db9\u9c76\ua3ed\u00a5\uc4a5\ub160\u2a9a\u3422\ua536\ufffd\u35ec\uc06b\ueb88\ufe70\uae67\ub0c1\u9b98\ue33f\u0c0b\u9133": true,
+      "\ub15d\ub9ef\ub130\u9e38\u83a8\ub451\u2918\u3512\u8372\ubf53\u2895\u288f\u5e67\u7682\ud7ab\u1bdd\u4a74\u9d54\u90ab\uaf88": "mDf8ODHd9XwqMsIxpY8F",
+      "\uf87d\ufffd\u8363\u06b2\u8698\ue349\u9a0c\u6bbc\u3ad4\uf6d6\u179a\ubce1\u0f2d\u8bef\ud3ae\u9820\u4b21\ufffd\u7872\uc6a3": "Office04",
+      "\u13ce\u3b87\u6cc4\uf094\ucbac\u6acc\uee1e\u29a4\ud03c\ub738\uef1c\u59ed\ud00f\u9516\u9413\ue2b0\u8eb2\u7f78\uba47\u3003": "Logs",
+      "\u07e2\u8a34\ueb43\ufed8\u7bcb\uaeeb\uc2b4\u3e5e\u18a1\u5c16\u0164\u5cba\u1347\u5eb5\ufffd\u734d\u11d4\u54dc\ufeb2\u66bd": true,
+      "\uf855\u7979\uf1a4\ub970\u3aec\ufffd\u4f2b\u8529\u236d\u49c7\u8295\u3d7c\u920d\u4c38\u0437\u4636\u87e8\u5e9b\ucd43\ud110": false
+    }
+  },
   {
     "file_path": "../malz/asyncrat_blank.exe",
     "sha256": "0e19cefba973323c234322452dfd04e318f14809375090b4f6ab39282f6ba07e",

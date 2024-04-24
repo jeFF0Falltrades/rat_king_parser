@@ -29,7 +29,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 from .config_parser_exception import ConfigParserException
-from .dotnet_constants import MDT_FIELD_DEF, MDT_STRING
+from .dotnet_constants import MDT_FIELD_DEF, MDT_METHOD_DEF, MDT_STRING
 from dnfile import dnPE
 from hashlib import sha256
 from logging import getLogger
@@ -93,16 +93,41 @@ class DotNetPEPayload:
             logger.exception(e)
             return f"Exception encountered: {e}"
 
+    # Given a method name, returns RVAs of methods matching that name
+    def method_rvas_from_name(self, name):
+        return [
+            row.Rva
+            for row in self.dotnetpe.net.mdtables.MethodDef
+            if row.Name.value == name
+        ]
+
     # Given the offset to an instruction, reverses the instruction to its
     # parent Method, and then finds the subsequent Method in the MethodDef
-    # table and returns its offset
-    def next_method_offset_from_instruction_offset(self, ins_offset):
+    # table and returns its offset or index
+    def next_method_from_instruction_offset(
+        self, ins_offset, step_back=0, by_token=False
+    ):
+        # Translate the instruction offset to RVA
         ins_rva = self.dotnetpe.get_rva_from_offset(ins_offset)
-        for method in self.dotnetpe.net.mdtables.MethodDef:
+        # Get both the regular MethodDef table and a sorted (by RVA) copy
+        # This is because the table is not guaranteed to be ordered by RVA
+        methods = self.dotnetpe.net.mdtables.MethodDef.rows
+        sorted_methods = sorted(methods, key=lambda m: m.Rva)
+        # Go through the sorted table and find the Method RVA that is greater
+        # than the instruction RVA (the subsequent function), and use step_back
+        # to get the function containing the instruction if necessary
+        for idx, method in enumerate(sorted_methods):
             if method.Rva > ins_rva:
-                return self.offset_from_rva(method.Rva)
+                return (
+                    # Add 1 to token ID as table starts at index 1, not 0
+                    methods.index(sorted_methods[idx - step_back]) + 1 + MDT_METHOD_DEF
+                    if by_token
+                    else self.offset_from_rva(
+                        methods[methods.index(sorted_methods[idx - step_back])].Rva
+                    )
+                )
         raise ConfigParserException(
-            f"Could not find next method from instruction offset {ins_offset}"
+            f"Could not find method from instruction offset {ins_offset}"
         )
 
     # Given an RVA, returns a data/file offset
@@ -118,6 +143,14 @@ class DotNetPEPayload:
                 f"Could not extract string value from offset {hex(str_offset)} with delimiter {delimiter}"
             ) from e
         return result
+
+    def string_from_range(self, start_offset, end_offset):
+        try:
+            return self.data[start_offset, end_offset]
+        except Exception as e:
+            raise ConfigParserException(
+                f"Could not extract string value from range {hex(start_offset)}:{hex(end_offset)}"
+            ) from e
 
     # Given an RVA, derives the corresponding User String
     def user_string_from_rva(self, rva):

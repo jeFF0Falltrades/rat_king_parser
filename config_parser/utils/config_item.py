@@ -59,7 +59,7 @@ class ConfigItem:
                 field_value = self.derive_item_value(obj)
                 field_rva = bytes_to_int(string_rva)
             except Exception:
-                logger.error(f"Could not parse value from {obj} at {string_rva}")
+                logger.debug(f"Could not parse value from {obj} at {string_rva}")
                 continue
             fields[field_rva] = field_value
             found_items += 1
