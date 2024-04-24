@@ -29,7 +29,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 from .config_parser_exception import ConfigParserException
-from .data_utils import bytes_to_int, decode_bytes
+from .data_utils import bytes_to_int, decode_bytes, int_to_bytes
 from .dotnet_constants import OPCODE_LDSTR, OPCODE_LDTOKEN
 from base64 import b64decode
 from cryptography.hazmat.backends import default_backend
@@ -48,21 +48,20 @@ MIN_CIPHERTEXT_LEN = 48
 
 
 class ConfigAESDecryptor:
-    PATTERN_AES_KEY_AND_BLOCK_SIZE = b"\x07\x20(.{4})\x6f.{4}\x07\x20(.{4})"
-    PATTERN_AES_KEY_BASE = b"\x7e(.{3}\x04)\x73.{3}\x06(?:\x25|\x80.{15})+"
-    PATTERN_AES_METADATA = b"\x73.{4}\x7a\x03\x7e(.{4})\x20"
+    PATTERN_AES_KEY_AND_BLOCK_SIZE = (
+        b"[\x06-\x09]\x20(.{4})\x6f.{4}[\x06-\x09]\x20(.{4})"
+    )
+    PATTERN_AES_KEY_BASE = b"(.{3}\x04).%b"
+    PATTERN_AES_SALT_ITER = b"[\x02-\x05]\x7e(.{4})\x20(.{4})\x73"
     PATTERN_AES_SALT_INIT = b"\x80%b\x2a"
 
     def __init__(self, payload, encrypted_config_strings):
         self.payload = payload
         self.encrypted_config_strings = encrypted_config_strings
-        self.aes_metadata_flag = self.get_aes_metadata_flag()
-        self.key_size, self.block_size = self.get_aes_key_and_block_size()
-        self.iterations = self.get_aes_iterations()
-        self.salt = self.get_aes_salt()
-        # Call these last as we need the above attributes to derive the key
-        self.key_candidates = self.get_aes_key_candidates()
-        self.key = None  # set in decrypt_encrypted_strings()
+        self.key_size = self.block_size = self.iterations = self.salt = (
+            self.key_candidates
+        ) = self.key = None
+        self.aes_metadata = self.get_aes_metadata()
 
     # Given an initialization vector and ciphertext, creates a Cipher
     # object with the AES key and specified IV and decrypts the ciphertext
@@ -135,40 +134,40 @@ class ConfigAESDecryptor:
                 except ConfigParserException as e:
                     last_exc = e
             if result is None:
-                raise ConfigParserException("Decryption failed") from last_exc
+                logger.debug(
+                    f"Decryption failed for item {v}: {last_exc}; Leaving as original value..."
+                )
+                result = v
             logger.debug(f"Key: {k}, Value: {result}")
             decrypted_config_strings[k] = result
         logger.debug("Successfully decrypted strings")
         return decrypted_config_strings
 
-    # Extracts the AES iteration number from payload data
-    def get_aes_iterations(self):
-        logger.debug("Extracting AES iterations...")
-        iterations_offset_start = self.aes_metadata_flag.end()
-        iterations_val_packed = self.payload.data[
-            iterations_offset_start : iterations_offset_start + 2
-        ]
-        iterations = bytes_to_int(iterations_val_packed)
-        logger.debug(f"Found AES iteration number of {iterations}")
-        return iterations
-
-    # Extracts AES key candidates from the payload using a regex pattern which
-    # looks for the initialization of the key - specifically, the following
-    # ops:
-    #
-    # ldsfld    string Client.Settings::Key
-    # newobj    instance void Client.Algorithm.Aes256::.ctor(string)
-    def get_aes_key_candidates(self):
+    # Extracts AES key candidates from the payload
+    def get_aes_key_candidates(self, metadata_ins_offset):
         logger.debug("Extracting possible AES key values...")
         keys = []
-        hit = search(self.PATTERN_AES_KEY_BASE, self.payload.data, DOTALL)
-        if hit is None:
+
+        # Get the RVA of the method that sets up AES256 metadata
+        metadata_method_rva = self.payload.next_method_from_instruction_offset(
+            metadata_ins_offset, step_back=1, by_token=True
+        )
+
+        # Insert this RVA into the KEY_BASE pattern to find where the AES key
+        # is initialized
+        key_hit = search(
+            self.PATTERN_AES_KEY_BASE % int_to_bytes(metadata_method_rva),
+            self.payload.data,
+            DOTALL,
+        )
+        if key_hit is None:
             raise ConfigParserException("Could not find AES key pattern")
+        key_rva = bytes_to_int(key_hit.groups()[0])
+        logger.debug(f"AES key RVA: {hex(key_rva)}")
 
         # Since we already have a map of all field names, use the key field
         # name to index into our existing config dict
-        key_field_rva = bytes_to_int(hit.groups()[0])
-        passphrase_candidates = self.derive_aes_passphrase_candidates(key_field_rva)
+        passphrase_candidates = self.derive_aes_passphrase_candidates(key_rva)
 
         for candidate in passphrase_candidates:
             try:
@@ -204,31 +203,32 @@ class ConfigAESDecryptor:
         logger.debug(f"Found key size {key_size} and block size {block_size}")
         return key_size, block_size
 
-    # Identifies the initialization of the AES256 object in the payload by
-    # looking for the following ops:
-    #
-    # newobj	instance void [mscorlib]System.ArgumentException...
-    # throw
-    # ldarg.1
-    # ldsfld	uint8[] Client.Algorithm.Aes256::Salt
-    def get_aes_metadata_flag(self):
-        logger.debug("Extracting AES metadata flag...")
+    # Identifies the initialization of the AES256 object in the payload
+    def get_aes_metadata(self):
+        logger.debug("Extracting AES metadata...")
         # Important to use DOTALL here (and with all regex ops to be safe)
         # as we are working with bytes, and if we do not set this, and the
         # byte sequence contains a byte that equates to a newline (\n or 0x0A),
         # the search will fail
-        md_flag_offset = search(self.PATTERN_AES_METADATA, self.payload.data, DOTALL)
-        if md_flag_offset is None:
-            raise ConfigParserException("Could not identify AES metadata flag")
-        logger.debug(f"AES metadata flag found at offset {hex(md_flag_offset.start())}")
-        return md_flag_offset
+        metadata = search(self.PATTERN_AES_SALT_ITER, self.payload.data, DOTALL)
+        if metadata is None:
+            raise ConfigParserException("Could not identify AES metadata")
+        logger.debug(f"AES metadata found at offset {hex(metadata.start())}")
+
+        self.key_size, self.block_size = self.get_aes_key_and_block_size()
+
+        logger.debug("Extracting AES iterations...")
+        self.iterations = bytes_to_int(metadata.groups()[1])
+        logger.debug(f"Found AES iteration number of {self.iterations}")
+
+        self.salt = self.get_aes_salt(metadata.groups()[0])
+        self.key_candidates = self.get_aes_key_candidates(metadata.start())
+        return metadata
 
     # Extracts the AES salt from the payload, accounting for both hardcoded
     # salt byte arrays, and salts derived from hardcoded strings
-    def get_aes_salt(self):
+    def get_aes_salt(self, salt_rva):
         logger.debug("Extracting AES salt value...")
-        # The Salt RVA was captured in our metadata flag pattern
-        aes_salt_rva = self.aes_metadata_flag.groups()[0]
         # Use % to insert our salt RVA into our match pattern
         # This pattern will then find the salt initialization ops,
         # specifically:
@@ -236,7 +236,7 @@ class ConfigAESDecryptor:
         # stsfld	uint8[] Client.Algorithm.Aes256::Salt
         # ret
         aes_salt_initialization = self.payload.data.find(
-            self.PATTERN_AES_SALT_INIT % aes_salt_rva
+            self.PATTERN_AES_SALT_INIT % salt_rva
         )
         if aes_salt_initialization == -1:
             raise ConfigParserException("Could not identify AES salt initialization")

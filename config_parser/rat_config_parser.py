@@ -48,6 +48,7 @@ class RATConfigParser:
         config_item.SpecialFolderConfigItem(),
         config_item.EncryptedStringConfigItem(),
     ]
+    MIN_CONFIG_LEN = 10
     PATTERN_VERIFY_HASH = (
         rb"(?:\x7e.{3}\x04(?:\x6f.{3}\x0a){2}\x74.{3}\x01.+?\x2a.+?\x00{6,})"
     )
@@ -72,8 +73,7 @@ class RATConfigParser:
                     f"Failed to load {file_path} as .NET executable"
                 )
             self.aes_decryptor = None  # Created in decrypt_and_decode_config()
-            self.encrypted_config = self.get_encrypted_config()
-            self.decrypt_and_decode_config()
+            self.report["config"] = self.get_config()
             self.report["aes_key"] = (
                 self.aes_decryptor.key.hex()
                 if self.aes_decryptor.key is not None
@@ -88,43 +88,97 @@ class RATConfigParser:
             self.report["config"] = f"Exception encountered for {file_path}: {e}"
 
     # Decrypts/decodes values from an encrypted config
-    def decrypt_and_decode_config(self):
+    def decrypt_and_decode_config(self, encrypted_config):
+        decoded_config = {}
         for item in self.CONFIG_ITEM_TYPES:
-            item_data = item.parse_from(self.encrypted_config)
-            if type(item) is config_item.EncryptedStringConfigItem:
-                # Translate encrypted string RVAs to encrypted values
-                for k in item_data:
-                    item_data[k] = self.dnpp.user_string_from_rva(item_data[k])
-                # Decrypt the values
-                self.aes_decryptor = ConfigAESDecryptor(self.dnpp, item_data)
-                item_data = self.aes_decryptor.decrypt_encrypted_strings()
-            self.report["config"].update(item_data)
-        # Translate field name RVAs to string values
-        self.translate_config_field_names()
+            item_data = item.parse_from(encrypted_config)
+            if len(item_data) > 0:
+                if type(item) is config_item.EncryptedStringConfigItem:
+                    # Translate encrypted string RVAs to encrypted values
+                    for k in item_data:
+                        item_data[k] = self.dnpp.user_string_from_rva(item_data[k])
+                    # Decrypt the values
+                    self.aes_decryptor = ConfigAESDecryptor(self.dnpp, item_data)
+                    item_data = self.aes_decryptor.decrypt_encrypted_strings()
+                decoded_config.update(item_data)
+        if len(decoded_config) < self.MIN_CONFIG_LEN:
+            raise ConfigParserException("Minimum threshold of config items not met")
+        return decoded_config
 
-    # Search for the RAT configuration in the Settings module
-    def get_encrypted_config(self):
+    # Searches for the RAT configuration in the Settings module
+    def get_config(self):
         logger.debug("Extracting encrypted config...")
+        try:
+            config_start, decrypted_config = self.get_config_verify_hash_method()
+        except Exception:
+            logger.debug("VerifyHash() method failed; Attempting .cctor brute force...")
+            # If the typical patterns are not found, start brute-forcing
+            try:
+                config_start, decrypted_config = self.get_config_cctor_brute_force()
+            except Exception as e:
+                raise ConfigParserException(
+                    "Could not identify encrypted config"
+                ) from e
+        logger.debug(f"Encrypted config found at offset {hex(config_start)}...")
+        return self.translate_config_field_names(decrypted_config)
+
+    # Attempts to retrieve the config via brute-force, looking through every
+    # static constructor (.cctor) and attempting to decode/decrypt a valid
+    # config from that constructor
+    def get_config_cctor_brute_force(self):
+        candidates = self.dnpp.method_rvas_from_name(".cctor")
+        if len(candidates) == 0:
+            raise ConfigParserException("No .cctor method could be found")
+        # Get each .cctor method RVA and bytes content up to a RET op
+        candidate_data = {
+            rva: self.dnpp.string_from_offset(
+                self.dnpp.offset_from_rva(rva), OPCODE_RET
+            )
+            for rva in candidates
+        }
+        config_start, decrypted_config = None, None
+        for method_rva, method_ins in candidate_data.items():
+            logger.debug(
+                f"Attempting brute force at .cctor method at {hex(method_rva)}"
+            )
+            try:
+                config_start, decrypted_config = (
+                    method_rva,
+                    self.decrypt_and_decode_config(method_ins),
+                )
+                break
+            except Exception as e:
+                logger.debug(e)
+                continue
+        if decrypted_config is None:
+            raise ConfigParserException(
+                "No valid configuration could be parsed from any .cctor methods"
+            )
+        return config_start, decrypted_config
+
+    # Attempts to retrieve the config via looking for a config section preceded
+    # by the "VerifyHash()" function that is typically found in the Settings
+    # module
+    def get_config_verify_hash_method(self):
         # Identify the VerifyHash() Method code
         hit = search(self.PATTERN_VERIFY_HASH, self.dnpp.data, DOTALL)
         if hit is None:
             raise ConfigParserException("Could not identify VerifyHash() marker method")
-
         # Reverse the VerifyHash() instruction offset, look up VerifyHash() in
         # the MethodDef metadata table, and then get the offset to the
         # subsequent function, which should be our config constructor
-        config_start = self.dnpp.next_method_offset_from_instruction_offset(hit.start())
+        config_start = self.dnpp.next_method_from_instruction_offset(hit.start())
         # Configuration ends with ret operation, so use that as our terminator
         encrypted_config = self.dnpp.string_from_offset(config_start, OPCODE_RET)
-        logger.debug(f"Encrypted config found at offset {hex(config_start)}...")
-        return encrypted_config
+        decrypted_config = self.decrypt_and_decode_config(encrypted_config)
+        return config_start, decrypted_config
 
     # Sorts the config by field name RVA prior to replacing RVAs with field
     # name strings (this is done last to preserve config ordering)
-    def translate_config_field_names(self):
+    def translate_config_field_names(self, decrypted_config):
         translated_config = {}
-        for field_rva, field_value in sorted(self.report["config"].items()):
+        for field_rva, field_value in sorted(decrypted_config.items()):
             key = self.dnpp.field_name_from_rva(field_rva)
             translated_config[key] = field_value
             logger.debug(f"Config item parsed {key}: {field_value}")
-        self.report["config"] = translated_config
+        return translated_config

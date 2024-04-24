@@ -33,10 +33,9 @@ from .config_parser_exception import ConfigParserException
 # Converts a bytes object to an int object using the specified byte order
 def bytes_to_int(bytes, order="little"):
     try:
-        result = int.from_bytes(bytes, byteorder=order)
+        return int.from_bytes(bytes, byteorder=order)
     except Exception as e:
         raise ConfigParserException(f"Error parsing int from value: {bytes}") from e
-    return result
 
 
 # Decodes a bytes object to a Unicode string, using UTF-16LE for byte values
@@ -55,3 +54,10 @@ def decode_bytes(byte_str):
             f"Error decoding bytes object to Unicode: {byte_str}"
         ) from e
     return result
+
+
+def int_to_bytes(int, length=4, order="little"):
+    try:
+        return int.to_bytes(length, order)
+    except Exception as e:
+        raise ConfigParserException(f"Error parsing bytes from value: {int}") from e
