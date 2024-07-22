@@ -4,8 +4,7 @@
 #
 # Author: jeFF0Falltrades
 #
-# Provides the primary functionality for parsing configurations from the
-# AsyncRAT, DcRAT, QuasarRAT, VenomRAT, etc. RAT families
+# Provides the primary functionality for parsing configurations from RATs
 #
 # MIT License
 #
@@ -29,10 +28,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 from .utils import config_item
+from .utils.config_parser_exception import ConfigParserException
 from .utils.dotnet_constants import OPCODE_RET
 from .utils.dotnetpe_payload import DotNetPEPayload
-from .utils.config_aes_decryptor import ConfigAESDecryptor
-from .utils.config_parser_exception import ConfigParserException
+from .utils.decryptors import SUPPORTED_DECRYPTORS
 from logging import getLogger
 from os.path import isfile
 from re import DOTALL, search
@@ -43,12 +42,13 @@ logger = getLogger(__name__)
 class RATConfigParser:
     CONFIG_ITEM_TYPES = [
         config_item.BoolConfigItem(),
+        config_item.ByteArrayConfigItem(),
         config_item.IntConfigItem(),
         config_item.NullConfigItem(),
         config_item.SpecialFolderConfigItem(),
         config_item.EncryptedStringConfigItem(),
     ]
-    MIN_CONFIG_LEN = 10
+    MIN_CONFIG_LEN = 7
     PATTERN_VERIFY_HASH = (
         rb"(?:\x7e.{3}\x04(?:\x6f.{3}\x0a){2}\x74.{3}\x01.+?\x2a.+?\x00{6,})"
     )
@@ -57,7 +57,7 @@ class RATConfigParser:
         self.report = {
             "file_path": file_path,
             "sha256": "",
-            "possible_yara_family": "",
+            "yara_possible_family": "",
             "aes_key": "",
             "aes_salt": "",
             "config": {},
@@ -67,21 +67,21 @@ class RATConfigParser:
                 raise Exception("File not found")
             self.dnpp = DotNetPEPayload(file_path, yara_rule)
             self.report["sha256"] = self.dnpp.sha256
-            self.report["possible_yara_family"] = self.dnpp.yara_match
+            self.report["yara_possible_family"] = self.dnpp.yara_match
             if self.dnpp.dotnetpe is None:
                 raise ConfigParserException(
                     f"Failed to load {file_path} as .NET executable"
                 )
-            self.aes_decryptor = None  # Created in decrypt_and_decode_config()
+            self.decryptor = None  # Created in decrypt_and_decode_config()
             self.report["config"] = self.get_config()
             self.report["aes_key"] = (
-                self.aes_decryptor.key.hex()
-                if self.aes_decryptor.key is not None
+                self.decryptor.key.hex()
+                if self.decryptor is not None and self.decryptor.key is not None
                 else "None"
             )
             self.report["aes_salt"] = (
-                self.aes_decryptor.salt.hex()
-                if self.aes_decryptor is not None
+                self.decryptor.salt.hex()
+                if self.decryptor is not None and self.decryptor.salt is not None
                 else "None"
             )
         except Exception as e:
@@ -90,6 +90,7 @@ class RATConfigParser:
     # Decrypts/decodes values from an encrypted config
     def decrypt_and_decode_config(self, encrypted_config):
         decoded_config = {}
+        selected_decryptor = 0
         for item in self.CONFIG_ITEM_TYPES:
             item_data = item.parse_from(encrypted_config)
             if len(item_data) > 0:
@@ -98,8 +99,26 @@ class RATConfigParser:
                     for k in item_data:
                         item_data[k] = self.dnpp.user_string_from_rva(item_data[k])
                     # Decrypt the values
-                    self.aes_decryptor = ConfigAESDecryptor(self.dnpp, item_data)
-                    item_data = self.aes_decryptor.decrypt_encrypted_strings()
+                    while selected_decryptor < len(SUPPORTED_DECRYPTORS):
+                        try:
+                            if self.decryptor is None:
+                                self.decryptor = SUPPORTED_DECRYPTORS[
+                                    selected_decryptor
+                                ](self.dnpp, item_data)
+                            item_data = self.decryptor.decrypt_encrypted_strings()
+                            break
+                        except Exception as e:
+                            logger.debug(
+                                f"Decryption failed with decryptor {SUPPORTED_DECRYPTORS[selected_decryptor]} : {e}, trying next decryptor..."
+                            )
+                            self.decryptor = None
+                            selected_decryptor += 1
+                elif type(item) is config_item.ByteArrayConfigItem:
+                    for k in item_data:
+                        arr_size, arr_rva = item_data[k]
+                        item_data[k] = self.dnpp.byte_array_from_size_and_rva(
+                            arr_size, arr_rva
+                        ).hex()
                 decoded_config.update(item_data)
         if len(decoded_config) < self.MIN_CONFIG_LEN:
             raise ConfigParserException("Minimum threshold of config items not met")
@@ -107,7 +126,7 @@ class RATConfigParser:
 
     # Searches for the RAT configuration in the Settings module
     def get_config(self):
-        logger.debug("Extracting encrypted config...")
+        logger.debug("Extracting config...")
         try:
             config_start, decrypted_config = self.get_config_verify_hash_method()
         except Exception:
@@ -116,10 +135,8 @@ class RATConfigParser:
             try:
                 config_start, decrypted_config = self.get_config_cctor_brute_force()
             except Exception as e:
-                raise ConfigParserException(
-                    "Could not identify encrypted config"
-                ) from e
-        logger.debug(f"Encrypted config found at offset {hex(config_start)}...")
+                raise ConfigParserException("Could not identify config") from e
+        logger.debug(f"Config found at offset {hex(config_start)}...")
         return self.translate_config_field_names(decrypted_config)
 
     # Attempts to retrieve the config via brute-force, looking through every
