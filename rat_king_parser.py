@@ -89,7 +89,10 @@ def parse_args():
 # Processes payloads and parses configs in a multiprocessing-friendly manner
 def parse_config(fp, debug, yara_rule_path):
     # Since we are utilizing multiprocessing, set up logging once per child
-    basicConfig(level=DEBUG if debug else WARNING)
+    basicConfig(
+        level=DEBUG if debug else WARNING,
+        format=f"%(levelname)s:%(name)s:{fp}:%(message)s",
+    )
     # YARA rule types cannot be pickled and must be instantiated per subprocess
     rule = load_yara(yara_rule_path)
     return RATConfigParser(fp, rule).report
