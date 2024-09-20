@@ -180,8 +180,7 @@ $ rat-king-parser dangerzone/* | jq
       "맻胼䇸ﳊ㒡蠯칣ᰶ⇷敉謵완瀫ᣣ究హ": "APPLICATIONDATA",
       "梽畨芾⇼범䨖ꔭ⧭ㅙ⢄熼ꟿ⼳᷍砫ᡸꟿﾼഹ": "1.3.0.0",
       "ꥄ챥蝝࿙ዷ䑌⭞⿑㦝䜒䖘苘ꃧ읲㚥ᡄ媬": "qztadmin.duckdns.org:9782;",
-      "姰쭕锓
-滧ꥀ栞丫갣橶譌窴׮ꄩ邪᷺": "1WvgEMPjdwfqIMeM9MclyQ==",
+      "姰쭕锓滧ꥀ栞丫갣橶譌窴׮ꄩ邪᷺": "1WvgEMPjdwfqIMeM9MclyQ==",
       "αХɇらꁶꄕ搩〆ᮍ뽭⩖覮ϕ鷫Ꝧ겈屄롚쐢": "NcFtjbDOcsw7Evd3coMC0y4koy/SRZGydhNmno81ZOWOvdfg7sv0Cj5ad2ROUfX4QMscAIjYJdjrrs41+qcQwg==",
       "딕漩럙褹퍵ᮐ螉뗏흛ᅩ駔졾楝팵᳦ꔍ퓩": "SubDir",
       "楤쿄ㄕݮ㦲／ⳡÀ阙楞媾⯥舶㚽侕넉䜠൱胍": "Client.exe",
