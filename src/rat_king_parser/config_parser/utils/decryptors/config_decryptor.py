@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 #
-# config_decryptor_plaintext.py
+# config_decryptor.py
 #
 # Author: jeFF0Falltrades
 #
-# Provides a fall-through decryptor that will attempt to return the plaintext
-# values of a found config when all other decryptors fail
+# Provides a simple abstract base class for different types of config decryptors
 #
 # MIT License
 #
@@ -28,21 +27,29 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-from .config_decryptor import ConfigDecryptor
+from abc import ABC, abstractmethod
 from logging import getLogger
+
+from ..dotnetpe_payload import DotNetPEPayload
 
 logger = getLogger(__name__)
 
 
-class ConfigDecryptorPlaintext(ConfigDecryptor):
-    def __init__(self, payload, config_strings):
-        super().__init__(payload, config_strings)
+# Custom Exception to denote that a decryptor is incompatible with a payload
+class IncompatibleDecryptorException(Exception):
+    pass
 
-    def decrypt(self, ciphertext):
-        return ciphertext
 
-    def decrypt_encrypted_strings(self):
-        logger.debug(
-            "Could not find applicable decryptor, returning found config as plaintext..."
-        )
-        return self.config_strings
+class ConfigDecryptor(ABC):
+    def __init__(self, payload: DotNetPEPayload) -> None:
+        self.key: bytes | str = None
+        self._payload = payload
+        self.salt: bytes = None
+
+    # Abstract method to take in a map representing a configuration of config
+    # Field names and values and return a decoded/decrypted configuration
+    @abstractmethod
+    def decrypt_encrypted_strings(
+        self, encrypted_strings: dict[str, str]
+    ) -> dict[str, list[str] | str]:
+        pass

@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
 #
-# config_parser_exception.py
+# _version.py
 #
 # Author: jeFF0Falltrades
-#
-# Provides a simple custom Exception class for use with configuration parsing
-# actions
-#
-# MIT License
 #
 # Copyright (c) 2024 Jeff Archer
 #
@@ -28,5 +23,4 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-class ConfigParserException(Exception):
-    pass
+__version__ = "3.0.0"

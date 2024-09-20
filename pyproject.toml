@@ -1,0 +1,55 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = [ "setuptools" ]
+
+[project]
+name = "rat-king-parser"
+description = "A robust, multiprocessing-capable, multi-family RAT config parser/config extractor for AsyncRAT, DcRAT, VenomRAT, QuasarRAT, XWorm, Xeno RAT, and cloned/derivative RAT families."
+readme = "README.md"
+keywords = [
+  "asyncrat",
+  "dcrat",
+  "malware",
+  "parser",
+  "quasarrat",
+  "venomrat",
+  "xenorat",
+  "xworm",
+]
+license = { file = "LICENSE" }
+maintainers = [
+  { name = "jeFF0Falltrades", email = "8444166+jeFF0Falltrades@users.noreply.github.com" },
+]
+authors = [
+  { name = "jeFF0Falltrades", email = "8444166+jeFF0Falltrades@users.noreply.github.com" },
+]
+requires-python = ">=3.10"
+
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
+dynamic = [ "version" ]
+dependencies = [ "cryptography", "dnfile", "yara-python" ]
+urls."Bug Reports" = "https://github.com/jeFF0Falltrades/rat_king_parser/issues"
+urls."Homepage" = "https://github.com/jeFF0Falltrades/rat_king_parser"
+urls."Say Thanks!" = "https://www.buymeacoffee.com/jeff0falltrades"
+scripts.rat-king-parser = "rat_king_parser:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "rat_king_parser._version.__version__" }
+
+[tool.setuptools.packages.find]
+where = [ "src" ]
+include = [ "rat_king_parser*" ]
+namespaces = false
+
+[tool.setuptools.package-data]
+"rat_king_parser.yara_utils" = [ "*.yar", "*.yarc" ]
+
+[tool.ruff]
+lint.extend-select = [ "I" ]

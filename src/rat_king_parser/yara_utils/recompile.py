@@ -27,15 +27,21 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+import os.path
 from argparse import ArgumentParser
-from pathlib import Path
+
 from yara import compile
 
-DEFAULT_INPUT_PATH = str(Path(__file__).parent / "rules.yar")
-DEFAULT_OUTPUT_PATH = str(Path(__file__).parent / "rules.yarc")
+DEFAULT_INPUT_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "rules.yar"
+)
+YARC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rules.yarc")
 
 
-def recompile(input_path=DEFAULT_INPUT_PATH, output_path=DEFAULT_OUTPUT_PATH):
+# Compiles the YARA rules at the specified file path and saves them
+def recompile(
+    input_path: str = DEFAULT_INPUT_PATH, output_path: str = YARC_PATH
+) -> None:
     compiled_rule = compile(input_path)
     compiled_rule.save(output_path)
 
@@ -46,7 +52,7 @@ if __name__ == "__main__":
         "-i", "--input", default=DEFAULT_INPUT_PATH, help="YARA rule to compile"
     )
     ap.add_argument(
-        "-o", "--output", default=DEFAULT_OUTPUT_PATH, help="Compiled rule output path"
+        "-o", "--output", default=YARC_PATH, help="Compiled rule output path"
     )
     args = ap.parse_args()
     recompile(args.input, args.output)

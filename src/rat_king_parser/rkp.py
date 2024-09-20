@@ -1,21 +1,11 @@
 #!/usr/bin/env python3
 #
-# rat_king_parser.py
+# rkp.py
 #
 # Author: jeFF0Falltrades
 #
 # A robust, multiprocessing-capable RAT configuration parser for AsyncRAT,
-# DcRAT, VenomRAT, QuasarRAT, and similar RAT families utilizing a known
-# "Settings" module for establishing their configurations, from the YouTube
-# tutorial here:
-#
-# https://www.youtube.com/watch?v=yoz44QKe_2o
-#
-# and based on the original AsyncRAT config parser here:
-#
-# https://github.com/jeFF0Falltrades/Tutorials/tree/master/asyncrat_config_parser
-#
-# MIT License
+# DcRAT, VenomRAT, QuasarRAT, and derivative RAT families
 #
 # Copyright (c) 2024 Jeff Archer
 #
@@ -36,24 +26,25 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from concurrent.futures import ProcessPoolExecutor
-from config_parser import RATConfigParser
 from itertools import repeat
 from json import dumps
-from logging import basicConfig, DEBUG, getLogger, WARNING
+from logging import DEBUG, WARNING, basicConfig, getLogger
 from pathlib import Path
-from yara import load
-from yara_rules.recompile import recompile
+from typing import Any
+
+from yara import Rules, load
+
+from ._version import __version__
+from .config_parser import RATConfigParser
+from .yara_utils import YARC_PATH, recompile
 
 logger = getLogger(__name__)
 
-YARC_PATH = "yara_rules/rules.yarc"
-YARA_RECOMPILE_PATH = "yara_rules/recompile.py"
-
 
 # Loads the compiled yara rules for known strains from the provided path
-def load_yara(compiled_rule_path):
+def load_yara(compiled_rule_path: str) -> Rules:
     try:
         return load(compiled_rule_path)
     except Exception as e:
@@ -63,8 +54,11 @@ def load_yara(compiled_rule_path):
 
 
 # Parses arguments
-def parse_args():
+def parse_args() -> Namespace:
     ap = ArgumentParser()
+    ap.add_argument(
+        "-v", "--version", action="version", version=f"%(prog)s {__version__}"
+    )
     ap.add_argument(
         "file_paths",
         nargs="+",
@@ -75,7 +69,7 @@ def parse_args():
         "-r",
         "--recompile",
         action="store_true",
-        help="Recompile the YARA rule used for family detection prior to running the parser",
+        help="Recompile the YARA rule file used for family detection prior to running the parser",
     )
     ap.add_argument(
         "-y",
@@ -86,19 +80,22 @@ def parse_args():
     return ap.parse_args()
 
 
-# Processes payloads and parses configs in a multiprocessing-friendly manner
-def parse_config(fp, debug, yara_rule_path):
+# Processes payloads and parses configs, utilizing multiprocessing
+def parse_config(
+    file_path: str, yara_rule_path: str, debug: bool = False
+) -> dict[str, Any]:
     # Since we are utilizing multiprocessing, set up logging once per child
     basicConfig(
         level=DEBUG if debug else WARNING,
-        format=f"%(levelname)s:%(name)s:{fp}:%(message)s",
+        format=f"%(levelname)s:%(name)s:{file_path}:%(message)s",
     )
-    # YARA rule types cannot be pickled and must be instantiated per subprocess
+    # YARA Rules objects cannot be pickled and must be instantiated per
+    # subprocess
     rule = load_yara(yara_rule_path)
-    return RATConfigParser(fp, rule).report
+    return RATConfigParser(file_path, rule).report
 
 
-if __name__ == "__main__":
+def main() -> None:
     parsed_args = parse_args()
 
     if parsed_args.recompile:
@@ -110,12 +107,16 @@ if __name__ == "__main__":
         results = executor.map(
             parse_config,
             parsed_args.file_paths,
-            repeat(parsed_args.debug),
             repeat(parsed_args.yara),
+            repeat(parsed_args.debug),
         )
 
     # ProcessPoolExecutor.map() does not block, so we wait until after results
     # are collected from all subprocesses to add them to our collection
     decrypted_configs.extend(results)
     if len(decrypted_configs) > 0:
-        print(dumps(decrypted_configs))
+        print(dumps(decrypted_configs, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()

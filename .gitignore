@@ -1,2 +1,5 @@
-__pycache__/
 .history/
+.ruff_cache/
+__pycache__/
+build/
+*.egg-info/

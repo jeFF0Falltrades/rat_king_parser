@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
 #
-# config_decryptor.py
+# __init__.py
 #
 # Author: jeFF0Falltrades
-#
-# Provides a simple abstract base class for different types of config decryptors
-#
-# MIT License
 #
 # Copyright (c) 2024 Jeff Archer
 #
@@ -27,20 +23,6 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-from abc import ABC, abstractmethod
+from .recompile import YARC_PATH, recompile
 
-
-class ConfigDecryptor(ABC):
-    def __init__(self, payload, config_strings):
-        self.payload = payload
-        self.config_strings = config_strings
-        self.key = None
-        self.salt = None
-
-    @abstractmethod
-    def decrypt(self, ciphertext):
-        pass
-
-    @abstractmethod
-    def decrypt_encrypted_strings(self):
-        pass
+__all__ = [recompile, YARC_PATH]
