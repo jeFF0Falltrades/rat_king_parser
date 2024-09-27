@@ -36,9 +36,9 @@ from typing import Any
 
 from yara import Rules, load
 
-from ._version import __version__
-from .config_parser import RATConfigParser
-from .yara_utils import YARC_PATH, recompile
+from rat_king_parser._version import __version__
+from rat_king_parser.config_parser import RATConfigParser
+from rat_king_parser.yara_utils import YARC_PATH, recompile
 
 logger = getLogger(__name__)
 
