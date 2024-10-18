@@ -23,6 +23,7 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-from .recompile import YARC_PATH, recompile
+from .recompile import YARA_PATH, YARC_PATH, recompile
 
-__all__ = [recompile, YARC_PATH]
+__all__ = [recompile, YARA_PATH, YARC_PATH]
+

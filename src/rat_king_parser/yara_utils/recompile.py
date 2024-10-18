@@ -32,27 +32,22 @@ from argparse import ArgumentParser
 
 from yara import compile
 
-DEFAULT_INPUT_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "rules.yar"
-)
+YARA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rules.yar")
 YARC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rules.yarc")
 
 
 # Compiles the YARA rules at the specified file path and saves them
-def recompile(
-    input_path: str = DEFAULT_INPUT_PATH, output_path: str = YARC_PATH
-) -> None:
+def recompile(input_path: str = YARA_PATH, output_path: str = YARC_PATH) -> None:
     compiled_rule = compile(input_path)
     compiled_rule.save(output_path)
 
 
 if __name__ == "__main__":
     ap = ArgumentParser()
-    ap.add_argument(
-        "-i", "--input", default=DEFAULT_INPUT_PATH, help="YARA rule to compile"
-    )
+    ap.add_argument("-i", "--input", default=YARA_PATH, help="YARA rule to compile")
     ap.add_argument(
         "-o", "--output", default=YARC_PATH, help="Compiled rule output path"
     )
     args = ap.parse_args()
     recompile(args.input, args.output)
+
