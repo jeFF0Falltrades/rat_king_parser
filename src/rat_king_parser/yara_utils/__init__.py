@@ -26,4 +26,3 @@
 from .recompile import YARA_PATH, YARC_PATH, recompile
 
 __all__ = [recompile, YARA_PATH, YARC_PATH]
-
