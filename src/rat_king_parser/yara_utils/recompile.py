@@ -50,4 +50,3 @@ if __name__ == "__main__":
     )
     args = ap.parse_args()
     recompile(args.input, args.output)
-

@@ -32,9 +32,10 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
 ]
 dynamic = [ "version" ]
-dependencies = [ "cryptography", "dnfile", "yara-python" ]
+dependencies = [ "cryptography", "dnfile", "maco", "validators", "yara-python" ]
 urls."Bug Reports" = "https://github.com/jeFF0Falltrades/rat_king_parser/issues"
 urls."Homepage" = "https://github.com/jeFF0Falltrades/rat_king_parser"
 urls."Say Thanks!" = "https://www.buymeacoffee.com/jeff0falltrades"
