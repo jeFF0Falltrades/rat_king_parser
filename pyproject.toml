@@ -36,13 +36,12 @@ classifiers = [
 ]
 dynamic = [ "version" ]
 dependencies = [ "cryptography", "dnfile", "yara-python" ]
+
+optional-dependencies.maco = [ "maco", "validators" ]
 urls."Bug Reports" = "https://github.com/jeFF0Falltrades/rat_king_parser/issues"
 urls."Homepage" = "https://github.com/jeFF0Falltrades/rat_king_parser"
 urls."Say Thanks!" = "https://www.buymeacoffee.com/jeff0falltrades"
 scripts.rat-king-parser = "rat_king_parser:main"
-
-[tool.poetry.extras]
-maco = ["maco", "validators"]
 
 [tool.setuptools.dynamic]
 version = { attr = "rat_king_parser._version.__version__" }
