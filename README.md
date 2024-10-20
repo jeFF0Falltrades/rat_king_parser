@@ -4,13 +4,13 @@
 
 A robust, multiprocessing-capable, multi-family RAT config parser/extractor, tested for use with:
 
-* AsyncRAT
-* DcRAT 
-* VenomRAT
-* QuasarRAT
-* XWorm
-* XenoRat
-* Other cloned/derivative RAT families of the above
+- AsyncRAT
+- DcRAT 
+- VenomRAT
+- QuasarRAT
+- XWorm
+- XenoRat
+- Other cloned/derivative RAT families of the above
 
 This configuration parser seeks to be "robust" in that it does not require the user to know anything about the strain or configuration of the RAT ahead of time: 
 
@@ -28,7 +28,7 @@ and based on the original AsyncRAT config parser and tutorial here:
 
 ### Installation
 
-As of version `3.0.0`, the RAT King Parser can now be installed via `pip`:
+As of `v3.0.0`, the RAT King Parser can now be installed via `pip`:
 
 ```bash
 pip install git+https://github.com/jeFF0Falltrades/rat_king_parser.git
@@ -77,6 +77,22 @@ options:
 
 ```bash
 python recompile.py -i my_rule.yar -o my_rule.yarc
+```
+
+### External Integrations
+As of `v3.1.0`, RAT King Parser has introduced additional, optional wrapper extractors for integration with some external services.
+
+These currently include:
+
+- [MACO](https://github.com/CybercentreCanada/Maco): The Canadian Centre for Cyber Security's malware config extractor framework, which allows RAT King Parser to be integrated with MACO-compatible tools like [AssemblyLine](https://github.com/CybercentreCanada/assemblyline) (though RAT King Parser is already integrated in AssemblyLine's configuration extraction service without need for further configuration)
+
+In order to utilize these extractors, the optional dependencies for a particular extractor must be installed.
+
+This can be completed with `pip` by referencing the specific optional dependency group to install; For example:
+
+```bash
+pip install "rat_king_parser[maco] @ git+https://github.com/jeFF0Falltrades/rat_king_parser.git"
+
 ```
 
 ## Example Input/Output
@@ -441,7 +457,11 @@ Also, if this tool or video tutorial was helpful to you, that's always nice to h
 
 Thank you!
 
-## Logo Attribution
+## Contributions & Attribution
+Huge thanks to the following contributors for their outstanding work:
+
+- [doomedraven](https://github.com/doomedraven): For your help in integrating RKP into CAPEv2
+- [cccs-rs](https://github.com/cccs-rs): For your help in integrating RKP into AssemblyLine, as well as helping me wrap it to work with MACO
 
 The logo for this project contains modifications of the following images:
 
