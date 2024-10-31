@@ -460,7 +460,7 @@ Thank you!
 ## Contributions & Attribution
 Huge thanks to the following contributors for their outstanding work:
 
-- [doomedraven](https://github.com/doomedraven): For your help in integrating RKP into CAPEv2
+- [doomedraven](https://github.com/doomedraven): For your help in integrating RKP into CAPEv2 and your assistance in getting rat-king-parser on PyPI
 - [cccs-rs](https://github.com/cccs-rs): For your help in integrating RKP into AssemblyLine, as well as helping me wrap it to work with MACO
 
 The logo for this project contains modifications of the following images:
