@@ -28,10 +28,10 @@ and based on the original AsyncRAT config parser and tutorial here:
 
 ### Installation
 
-As of `v3.0.0`, the RAT King Parser can now be installed via `pip`:
+As of `v3.1.2`, the RAT King Parser is now available on PyPI and can be installed via `pip`:
 
 ```bash
-pip install git+https://github.com/jeFF0Falltrades/rat_king_parser.git
+pip install rat-king-parser
 ```
 
 Note that YARA must be [installed separately](https://yara.readthedocs.io/en/stable/gettingstarted.html#compiling-and-installing-yara).
