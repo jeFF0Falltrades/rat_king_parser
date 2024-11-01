@@ -1,4 +1,4 @@
-![rat_king_parser logo](https://raw.githubusercontent.com/jeFF0Falltrades/rat_king_parser/master/.github/logo.png)
+![rat_king_parser logo](https://raw.githubusercontent.com/jeFF0Falltrades/rat_king_parser/refs/heads/master/.github/logo.png)
 
 # The RAT King Parser
 
