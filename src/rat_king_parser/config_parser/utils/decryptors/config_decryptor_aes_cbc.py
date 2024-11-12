@@ -253,7 +253,11 @@ class ConfigDecryptorAESCBC(ConfigDecryptor):
             try:
                 self.salt = self._get_aes_salt(candidate.groups()[0])
                 metadata = candidate
-            except ConfigParserException:
+                self._key_rva = self._get_aes_key_rva(metadata.start())
+            except ConfigParserException as cfe:
+                logger.info(
+                    f"Initialization using salt candidate {hex(bytes_to_int(candidate.groups()[0]))} failed: {cfe}"
+                )
                 continue
         if metadata is None:
             raise ConfigParserException("Could not identify AES metadata")
@@ -264,8 +268,6 @@ class ConfigDecryptorAESCBC(ConfigDecryptor):
         logger.debug("Extracting AES iterations...")
         self._iterations = bytes_to_int(metadata.groups()[1])
         logger.debug(f"Found AES iteration number of {self._iterations}")
-
-        self._key_rva = self._get_aes_key_rva(metadata.start())
 
     # Extracts the AES salt from the payload, accounting for both hardcoded
     # salt byte arrays, and salts derived from hardcoded strings
@@ -279,7 +281,7 @@ class ConfigDecryptorAESCBC(ConfigDecryptor):
         # stsfld	uint8[] Client.Algorithm.Aes256::Salt
         # ret
         aes_salt_initialization = self._payload.data.find(
-            self._PATTERN_AES_SALT_INIT % re.escape(salt_rva)
+            self._PATTERN_AES_SALT_INIT % salt_rva
         )
         if aes_salt_initialization == -1:
             raise ConfigParserException("Could not identify AES salt initialization")
