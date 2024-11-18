@@ -26,6 +26,7 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+import os
 from argparse import ArgumentParser, Namespace
 from concurrent.futures import ProcessPoolExecutor
 from itertools import repeat
@@ -103,10 +104,14 @@ def main() -> None:
 
     decrypted_configs, results = [], []
 
+    files = parsed_args.file_paths
+    if files and os.path.isdir(files[0]):
+        files = [os.path.join(files[0], file) for file in os.listdir(files[0])]
+
     with ProcessPoolExecutor() as executor:
         results = executor.map(
             parse_config,
-            parsed_args.file_paths,
+            files,
             repeat(parsed_args.yara),
             repeat(parsed_args.debug),
         )
