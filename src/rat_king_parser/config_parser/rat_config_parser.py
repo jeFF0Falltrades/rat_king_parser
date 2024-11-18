@@ -56,7 +56,7 @@ class RATConfigParser:
         rb"\x7e.{3}\x04(?:\x6f.{3}\x0a){2}\x74.{3}\x01", DOTALL
     )
 
-    def __init__(self, file_path: str, yara_rule: Rules = None) -> None:
+    def __init__(self, file_path: str = "", yara_rule: Rules = None, data: bytes = None) -> None:
         self.report = {
             "file_path": file_path,
             "sha256": "",
@@ -66,7 +66,8 @@ class RATConfigParser:
             "config": {},
         }
         try:
-            if not isfile(file_path):
+
+            if not data and not isfile(file_path):
                 raise ConfigParserException("File not found")
             # Filled in _decrypt_and_decode_config()
             self._incompatible_decryptors: list[int] = []
