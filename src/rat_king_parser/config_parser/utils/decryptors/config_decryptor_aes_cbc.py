@@ -29,9 +29,9 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+import re
 from base64 import b64decode
 from logging import getLogger
-from re import DOTALL, compile, escape, search
 from typing import Tuple
 
 from cryptography.hazmat.backends import default_backend
@@ -56,13 +56,15 @@ class ConfigDecryptorAESCBC(ConfigDecryptor):
     _MIN_CIPHERTEXT_LEN = 48
 
     # Patterns for identifying AES metadata
-    _PATTERN_AES_KEY_AND_BLOCK_SIZE = compile(
-        b"[\x06-\x09]\x20(.{4})\x6f.{4}[\x06-\x09]\x20(.{4})", DOTALL
+    _PATTERN_AES_KEY_AND_BLOCK_SIZE = re.compile(
+        b"[\x06-\x09]\x20(.{4})\x6f.{4}[\x06-\x09]\x20(.{4})", re.DOTALL
     )
-    # Do not compile in-line replacement patterns
+    # Do not re.compile in-line replacement patterns
     _PATTERN_AES_KEY_BASE = b"(.{3}\x04).%b"
     _PATTERN_AES_SALT_INIT = b"\x80%b\x2a"
-    _PATTERN_AES_SALT_ITER = compile(b"[\x02-\x05]\x7e(.{4})\x20(.{4})\x73", DOTALL)
+    _PATTERN_AES_SALT_ITER = re.compile(
+        b"[\x02-\x05]\x7e(.{4})\x20(.{4})\x73", re.DOTALL
+    )
 
     def __init__(self, payload: DotNetPEPayload) -> None:
         super().__init__(payload)
@@ -204,7 +206,7 @@ class ConfigDecryptorAESCBC(ConfigDecryptor):
     # Extracts the AES key and block size from the payload
     def _get_aes_key_and_block_size(self) -> Tuple[int, int]:
         logger.debug("Extracting AES key and block size...")
-        hit = search(self._PATTERN_AES_KEY_AND_BLOCK_SIZE, self._payload.data)
+        hit = re.search(self._PATTERN_AES_KEY_AND_BLOCK_SIZE, self._payload.data)
         if hit is None:
             raise ConfigParserException("Could not extract AES key or block size")
 
@@ -228,10 +230,10 @@ class ConfigDecryptorAESCBC(ConfigDecryptor):
 
         # Insert this RVA into the KEY_BASE pattern to find where the AES key
         # is initialized
-        key_hit = search(
-            self._PATTERN_AES_KEY_BASE % escape(int_to_bytes(metadata_method_token)),
+        key_hit = re.search(
+            self._PATTERN_AES_KEY_BASE % re.escape(int_to_bytes(metadata_method_token)),
             self._payload.data,
-            DOTALL,
+            re.DOTALL,
         )
         if key_hit is None:
             raise ConfigParserException("Could not find AES key pattern")
@@ -244,7 +246,19 @@ class ConfigDecryptorAESCBC(ConfigDecryptor):
     # sets the necessary values needed for decryption
     def _get_aes_metadata(self) -> None:
         logger.debug("Extracting AES metadata...")
-        metadata = search(self._PATTERN_AES_SALT_ITER, self._payload.data)
+        metadata = None
+        # Some payloads have multiple embedded salt values:
+        # Find the one that is actually used for initialization
+        for candidate in re.finditer(self._PATTERN_AES_SALT_ITER, self._payload.data):
+            try:
+                self.salt = self._get_aes_salt(candidate.groups()[0])
+                metadata = candidate
+                self._key_rva = self._get_aes_key_rva(metadata.start())
+            except ConfigParserException as cfe:
+                logger.info(
+                    f"Initialization using salt candidate {hex(bytes_to_int(candidate.groups()[0]))} failed: {cfe}"
+                )
+                continue
         if metadata is None:
             raise ConfigParserException("Could not identify AES metadata")
         logger.debug(f"AES metadata found at offset {hex(metadata.start())}")
@@ -254,9 +268,6 @@ class ConfigDecryptorAESCBC(ConfigDecryptor):
         logger.debug("Extracting AES iterations...")
         self._iterations = bytes_to_int(metadata.groups()[1])
         logger.debug(f"Found AES iteration number of {self._iterations}")
-
-        self.salt = self._get_aes_salt(metadata.groups()[0])
-        self._key_rva = self._get_aes_key_rva(metadata.start())
 
     # Extracts the AES salt from the payload, accounting for both hardcoded
     # salt byte arrays, and salts derived from hardcoded strings
@@ -270,7 +281,7 @@ class ConfigDecryptorAESCBC(ConfigDecryptor):
         # stsfld	uint8[] Client.Algorithm.Aes256::Salt
         # ret
         aes_salt_initialization = self._payload.data.find(
-            self._PATTERN_AES_SALT_INIT % escape(salt_rva)
+            self._PATTERN_AES_SALT_INIT % salt_rva
         )
         if aes_salt_initialization == -1:
             raise ConfigParserException("Could not identify AES salt initialization")

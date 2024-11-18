@@ -96,6 +96,8 @@ KNOWN_CONFIG_FIELD_NAMES = set(
         "Serversignature",
         "Sleep",
         "TAG",
+        "TelegramChatID",
+        "TelegramToken",
         "USBNM",
         "VERSION",
         "Ver_sion",
