@@ -72,7 +72,7 @@ class RATConfigParser:
             # Filled in _decrypt_and_decode_config()
             self._incompatible_decryptors: list[int] = []
             try:
-                self._dnpp = DotNetPEPayload(file_path, yara_rule)
+                self._dnpp = DotNetPEPayload(file_path, yara_rule, data)
             except Exception as e:
                 raise e
             self.report["sha256"] = self._dnpp.sha256
