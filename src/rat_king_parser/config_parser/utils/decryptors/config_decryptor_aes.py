@@ -112,7 +112,7 @@ class ConfigDecryptorAES(ConfigDecryptor):
         return passphrase_candidates
 
     # Decrypts encrypted config values with the provided cipher data
-    def decrypt_encrypted_strings(self, encrypted_strings):  # dict[str, str]) -> dict[str, str]:
+    def decrypt_encrypted_strings(self, encrypted_strings: dict[str, str]) -> dict[str, str]:
         logger.debug("Decrypting encrypted strings...")
         if self._key_candidates is None:
             self._key_candidates = self._get_aes_key_candidates(encrypted_strings)
