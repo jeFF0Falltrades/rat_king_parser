@@ -105,6 +105,13 @@ KNOWN_CONFIG_FIELD_NAMES = set(
         "delay",
         "mutex_string",
         "startup_name",
+        "UrlHost",
+        "TIPEUSER",
+        "KEYTASKS",
+        "PROYECTO",
+        "WEBVIEW",
+        "PERSISTENCE",
+        "UNINSUADEFEN",
     ]
 )
 
