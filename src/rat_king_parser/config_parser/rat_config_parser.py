@@ -155,7 +155,8 @@ class RATConfigParser:
 
                 decoded_config.update(item_data)
 
-        if len(decoded_config) < min_config_len:
+        # UrlHost is special case
+        if len(decoded_config) < min_config_len and "UrlHost" not in item_data:
             raise ConfigParserException(
                 f"Minimum threshold of config items not met: {len(decoded_config)}/{min_config_len}"
             )
