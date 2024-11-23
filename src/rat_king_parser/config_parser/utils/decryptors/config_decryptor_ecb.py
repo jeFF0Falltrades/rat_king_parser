@@ -98,7 +98,7 @@ class ConfigDecryptor3DES(ConfigDecryptor):
             block_size = TripleDES.block_size
         elif self.is_AES:
             algo = AES(self.key)
-            block_size
+            block_size = AES.block_size
         else:
             raise("Not identified crypto")
         algo_cipher = Cipher(algo, ECB(), backend=default_backend())
