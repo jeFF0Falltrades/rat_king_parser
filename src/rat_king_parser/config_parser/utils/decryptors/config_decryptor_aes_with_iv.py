@@ -31,13 +31,18 @@
 # SOFTWARE.
 import re
 from base64 import b64decode
+from contextlib import suppress
 from logging import getLogger
 from typing import Tuple
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
-from cryptography.hazmat.primitives.ciphers.modes import CBC
+from cryptography.hazmat.primitives.ciphers.modes import (
+    CBC,
+    CFB8,
+    ModeWithInitializationVector,
+)
 from cryptography.hazmat.primitives.hashes import SHA1
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.padding import PKCS7
@@ -51,13 +56,18 @@ from .config_decryptor import ConfigDecryptor, IncompatibleDecryptorException
 logger = getLogger(__name__)
 
 
-class ConfigDecryptorAESCBC(ConfigDecryptor):
+class ConfigDecryptorAESWithIV(ConfigDecryptor):
     # Minimum length of valid ciphertext
     _MIN_CIPHERTEXT_LEN = 48
+    _ALGO_MAP = {
+        23: CBC,
+        26: CFB8,
+    }
 
     # Patterns for identifying AES metadata
-    _PATTERN_AES_KEY_AND_BLOCK_SIZE = re.compile(
-        b"[\x06-\x09]\x20(.{4})\x6f.{4}[\x06-\x09]\x20(.{4})", re.DOTALL
+    _PATTERN_AES_KEY_AND_BLOCK_SIZE_AND_ALGO = re.compile(
+        b"[\x06-\x09]\x20(.{4})\x6f.{4}[\x06-\x09]\x20(.{4})\x6f.{4}[\x06-\x09](.)\x6f.{4}",
+        re.DOTALL,
     )
     # Do not re.compile in-line replacement patterns
     _PATTERN_AES_KEY_BASE = b"(.{3}\x04).%b"
@@ -68,6 +78,7 @@ class ConfigDecryptorAESCBC(ConfigDecryptor):
 
     def __init__(self, payload: DotNetPEPayload) -> None:
         super().__init__(payload)
+        self.aes_algo: ModeWithInitializationVector = CBC
         self._block_size: int = None
         self._iterations: int = None
         self._key_candidates: list[bytes] = None
@@ -84,7 +95,7 @@ class ConfigDecryptorAESCBC(ConfigDecryptor):
         logger.debug(
             f"Decrypting {ciphertext} with key {self.key.hex()} and IV {iv.hex()}..."
         )
-        aes_cipher = Cipher(AES(self.key), CBC(iv), backend=default_backend())
+        aes_cipher = Cipher(AES(self.key), self.aes_algo(iv), backend=default_backend())
         decryptor = aes_cipher.decryptor()
         # Use a PKCS7 unpadder to remove padding from decrypted value
         # https://cryptography.io/en/latest/hazmat/primitives/padding/
@@ -107,10 +118,8 @@ class ConfigDecryptorAESCBC(ConfigDecryptor):
     # will be added as candidates
     def _derive_aes_passphrase_candidates(self, key_val: str) -> list[bytes]:
         passphrase_candidates = [key_val.encode()]
-        try:
+        with suppress(Exception):
             passphrase_candidates.append(b64decode(key_val))
-        except Exception:
-            pass
         logger.debug(f"AES passphrase candidates found: {passphrase_candidates}")
         return passphrase_candidates
 
@@ -204,9 +213,13 @@ class ConfigDecryptorAESCBC(ConfigDecryptor):
         return keys
 
     # Extracts the AES key and block size from the payload
-    def _get_aes_key_and_block_size(self) -> Tuple[int, int]:
+    def _get_aes_key_block_size_and_algo(
+        self,
+    ) -> Tuple[int, int, ModeWithInitializationVector]:
         logger.debug("Extracting AES key and block size...")
-        hit = re.search(self._PATTERN_AES_KEY_AND_BLOCK_SIZE, self._payload.data)
+        hit = re.search(
+            self._PATTERN_AES_KEY_AND_BLOCK_SIZE_AND_ALGO, self._payload.data
+        )
         if hit is None:
             raise ConfigParserException("Could not extract AES key or block size")
 
@@ -214,9 +227,15 @@ class ConfigDecryptorAESCBC(ConfigDecryptor):
         # Note use of // instead of / to ensure integer output, not float
         key_size = bytes_to_int(hit.groups()[0]) // 8
         block_size = bytes_to_int(hit.groups()[1])
+        algo_id = bytes_to_int(hit.groups()[2])
+        if algo_id not in self._ALGO_MAP:
+            raise ConfigParserException("Could not extract AES algorithm ID byte")
+        algo = self._ALGO_MAP[algo_id]
 
-        logger.debug(f"Found key size {key_size} and block size {block_size}")
-        return key_size, block_size
+        logger.debug(
+            f"Found key size {key_size}, block size {block_size} , and AES algorithm {algo}"
+        )
+        return key_size, block_size, algo
 
     # Given an offset to an instruction within the Method that sets up the
     # Cipher, extracts the AES key RVA from the payload
@@ -262,8 +281,9 @@ class ConfigDecryptorAESCBC(ConfigDecryptor):
         if metadata is None:
             raise ConfigParserException("Could not identify AES metadata")
         logger.debug(f"AES metadata found at offset {hex(metadata.start())}")
-
-        self._key_size, self._block_size = self._get_aes_key_and_block_size()
+        self._key_size, self._block_size, self.aes_algo = (
+            self._get_aes_key_block_size_and_algo()
+        )
 
         logger.debug("Extracting AES iterations...")
         self._iterations = bytes_to_int(metadata.groups()[1])
