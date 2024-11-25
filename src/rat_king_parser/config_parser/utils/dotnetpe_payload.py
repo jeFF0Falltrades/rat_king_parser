@@ -53,9 +53,11 @@ class DotNetPEMethod:
 
 
 class DotNetPEPayload:
-    def __init__(self, file_path: str, yara_rule: Rules = None) -> None:
+    def __init__(self, file_path: str, yara_rule: Rules = None, data: bytes = None) -> None:
         self.file_path = file_path
-        self.data = self._get_file_data()
+        self.data = data
+        if not self.data:
+            self.data = self._get_file_data()
 
         # Calculate SHA256
         sha256_obj = sha256()
@@ -64,7 +66,10 @@ class DotNetPEPayload:
 
         self.dotnetpe: dnPE = None
         try:
-            self.dotnetpe = dnPE(self.file_path, clr_lazy_load=True)
+            if self.data:
+                self.dotnetpe = dnPE(data=self.data, clr_lazy_load=True)
+            else:
+                self.dotnetpe = dnPE(self.file_path, clr_lazy_load=True)
         except Exception:
             raise ConfigParserException("Failed to load project as dotnet executable")
 
@@ -162,11 +167,11 @@ class DotNetPEPayload:
         logger.debug(f"Successfully read {len(data)} bytes")
         return data
 
-    # Tests a given YARA rule object against the file at self.file_path,
+    # Tests a given YARA rule object against the file content,
     # returning the matching rule's name, or "No match"
     def _match_yara(self, rule: Rules) -> str:
         try:
-            match = rule.match(self.file_path)
+            match = rule.match(data=self.data)
             return str(match[0]) if len(match) > 0 else "No match"
         except Exception as e:
             logger.exception(e)
