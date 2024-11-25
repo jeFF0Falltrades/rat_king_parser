@@ -60,14 +60,16 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
     # Minimum length of valid ciphertext
     _MIN_CIPHERTEXT_LEN = 48
     _ALGO_MAP = {
-        23: CBC,
-        26: CFB8,
+        b"\x17": CBC,
+        # b"\x18": ECB,
+        # b"\x19": OFB,
+        b"\x1A": CFB8,
     }
 
     # Patterns for identifying AES metadata
-    _PATTERN_AES_KEY_AND_BLOCK_SIZE_AND_ALGO = re.compile(
-        b"[\x06-\x09]\x20(.{4})\x6f.{4}[\x06-\x09]\x20(.{4})\x6f.{4}[\x06-\x09](.)\x6f.{4}",
-        re.DOTALL,
+    _PATTERN_AES_KEY_AND_BLOCK_SIZE_AND_ALGO = (
+        re.compile(b"[\x06-\x09]\x20(.{4})\x6f.{4}[\x06-\x09]\x20(.{4})\x6f.{4}[\x06-\x09](.)\x6f.{4}", re.DOTALL),
+        re.compile(br"\x11\x01\x20(.{4})\x28.{4}\x11\x01\x20(.{4})\x6f.{4}\x11\x01(.)\x6f.{4}", re.DOTALL),
     )
     # Do not re.compile in-line replacement patterns
     _PATTERN_AES_KEY_BASE = b"(.{3}\x04).%b"
@@ -217,17 +219,20 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
         self,
     ) -> Tuple[int, int, ModeWithInitializationVector]:
         logger.debug("Extracting AES key and block size...")
-        hit = re.search(
-            self._PATTERN_AES_KEY_AND_BLOCK_SIZE_AND_ALGO, self._payload.data
-        )
-        if hit is None:
+        hit = False
+        for pattern in self._PATTERN_AES_KEY_AND_BLOCK_SIZE_AND_ALGO:
+            check_hit = re.search(pattern, self._payload.data)
+            if not check_hit:
+                continue
+            hit = check_hit
+        if not hit:
             raise ConfigParserException("Could not extract AES key or block size")
 
         # Convert key size from bits to bytes by dividing by 8
         # Note use of // instead of / to ensure integer output, not float
         key_size = bytes_to_int(hit.groups()[0]) // 8
         block_size = bytes_to_int(hit.groups()[1])
-        algo_id = bytes_to_int(hit.groups()[2])
+        algo_id = hit.groups()[2]
         if algo_id not in self._ALGO_MAP:
             raise ConfigParserException("Could not extract AES algorithm ID byte")
         algo = self._ALGO_MAP[algo_id]
