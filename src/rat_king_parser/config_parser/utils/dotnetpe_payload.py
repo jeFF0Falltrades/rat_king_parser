@@ -167,7 +167,7 @@ class DotNetPEPayload:
         logger.debug(f"Successfully read {len(data)} bytes")
         return data
 
-    # Tests a given YARA rule object against the file content at self.data,
+    # Tests a given YARA rule object against the file content,
     # returning the matching rule's name, or "No match"
     def _match_yara(self, rule: Rules) -> str:
         try:
