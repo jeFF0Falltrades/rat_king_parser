@@ -41,13 +41,13 @@ from cryptography.hazmat.primitives.padding import PKCS7
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 
 try:
-    from cryptography.hazmat.primitives.ciphers.algorithms import TripleDES
-except ImportError:
     # from cryptography.hazmat.primitives.ciphers.algorithms import AES
     # To be deprecated in 48, moved in 43
     # https://cryptography.io/en/latest/hazmat/decrepit/ciphers/
 
     from cryptography.hazmat.decrepit.ciphers.algorithms import TripleDES
+except ImportError:
+    from cryptography.hazmat.primitives.ciphers.algorithms import TripleDES
 
 from ...config_parser_exception import ConfigParserException
 from ..data_utils import bytes_to_int, decode_bytes
@@ -202,7 +202,6 @@ class ConfigDecryptor3DES(ConfigDecryptor):
         if not hardcoded:
             key_rva = bytes_to_int(key_hit.groups()[0])
             logger.debug(f"AES/3DES key RVA: {hex(key_rva)}")
-            key_rva = self._payload.field_name_from_rva(key_rva)
         else:
             key_mdtoken = key_hit.groups()[0]
             if key_mdtoken:
