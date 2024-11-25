@@ -77,7 +77,10 @@ class ConfigDecryptor3DES(ConfigDecryptor):
     # Detect AES vs 3DES
     _IS_3DES = compile(rb"(\x28|\x73).{3}\x0A\x13\x04\x11\x04", DOTALL)
     # Patterns for identifying AES metadata
-    _IS_AES = compile(b"[\x06-\x09]\x20(.{4})\x6f.{4}[\x06-\x09]\x20(.{4})\x6f.{4}[\x06-\x09](.)\x6f.{4}", DOTALL)
+    _IS_AES = compile(
+        b"[\x06-\x09]\x20(.{4})\x6f.{4}[\x06-\x09]\x20(.{4})\x6f.{4}[\x06-\x09](.)\x6f.{4}|[\x06-\x09]\x11\x05\x6f.{4}[\x06-\x09].\x6f.{4}[\x06-\x09]\x6f.{4}\x13",
+        DOTALL,
+    )
 
     def __init__(self, payload: DotNetPEPayload) -> None:
         super().__init__(payload)
@@ -93,12 +96,12 @@ class ConfigDecryptor3DES(ConfigDecryptor):
     # Given ciphertext, creates a Cipher object with the AES/3DES key and decrypts
     # the ciphertext
     def _decrypt(self, ciphertext: bytes) -> bytes:
-        if self.is_3DES:
-            algo = TripleDES(self.key)
-            block_size = TripleDES.block_size
-        elif self.is_AES:
+        if self.is_AES:
             algo = AES(self.key)
             block_size = AES.block_size
+        elif self.is_3DES:
+            algo = TripleDES(self.key)
+            block_size = TripleDES.block_size
         else:
             raise("Not identified crypto")
         algo_cipher = Cipher(algo, ECB(), backend=default_backend())
