@@ -30,7 +30,6 @@ from enum import Enum, auto
 from logging import getLogger
 from pathlib import Path
 from re import search
-from tempfile import NamedTemporaryFile
 from typing import Optional
 
 import validators
@@ -77,12 +76,10 @@ class RKPMACO(extractor.Extractor):
     def run(
         self, stream: typing.BinaryIO, matches: typing.List[Match]
     ) -> typing.Optional[model.ExtractorModel]:
-        with NamedTemporaryFile("w+b") as fh:
-            fh.write(stream.read())
-            fh.flush()
-            report = RATConfigParser(
-                fh.name, load(str(Path(__file__).parent / YARC_PATH))
-            ).report
+        report = RATConfigParser(
+            load(str(Path(__file__).parent / YARC_PATH)),
+            data=stream.read()
+        ).report
 
         # Check if exception occurred within RKP parsing
         if isinstance(report["config"], str) and report["config"].startswith(
