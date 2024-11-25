@@ -24,8 +24,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 from .config_decryptor import ConfigDecryptor, IncompatibleDecryptorException
-from .config_decryptor_aes_cbc import ConfigDecryptorAESCBC
 from .config_decryptor_aes_ecb import ConfigDecryptorAESECB
+from .config_decryptor_aes_with_iv import ConfigDecryptorAESWithIV
 from .config_decryptor_decrypt_xor import ConfigDecryptorDecryptXOR
 from .config_decryptor_plaintext import ConfigDecryptorPlaintext
 from .config_decryptor_random_hardcoded import ConfigDecryptorRandomHardcoded
@@ -33,7 +33,7 @@ from .config_decryptor_random_hardcoded import ConfigDecryptorRandomHardcoded
 __all__ = [
     ConfigDecryptor,
     IncompatibleDecryptorException,
-    ConfigDecryptorAESCBC,
+    ConfigDecryptorAESWithIV,
     ConfigDecryptorAESECB,
     ConfigDecryptorDecryptXOR,
     ConfigDecryptorRandomHardcoded,
@@ -42,7 +42,7 @@ __all__ = [
 
 # ConfigDecryptorPlaintext should always be the last fallthrough case
 SUPPORTED_DECRYPTORS = [
-    ConfigDecryptorAESCBC,
+    ConfigDecryptorAESWithIV,
     ConfigDecryptorAESECB,
     ConfigDecryptorDecryptXOR,
     ConfigDecryptorRandomHardcoded,
