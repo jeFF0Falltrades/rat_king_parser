@@ -25,8 +25,8 @@
 # SOFTWARE.
 
 from .config_decryptor import ConfigDecryptor, IncompatibleDecryptorException
-from .config_decryptor_aes_ecb import ConfigDecryptorECB
-from .config_decryptor_aes import ConfigDecryptorAES
+from .config_decryptor_aes_ecb import ConfigDecryptorAESECB
+from .config_decryptor_aes_with_iv import ConfigDecryptorAESWithIV
 from .config_decryptor_decrypt_xor import ConfigDecryptorDecryptXOR
 from .config_decryptor_plaintext import ConfigDecryptorPlaintext
 from .config_decryptor_random_hardcoded import ConfigDecryptorRandomHardcoded
@@ -34,8 +34,8 @@ from .config_decryptor_random_hardcoded import ConfigDecryptorRandomHardcoded
 __all__ = [
     ConfigDecryptor,
     IncompatibleDecryptorException,
-    ConfigDecryptorECB,
-    ConfigDecryptorAES,
+    ConfigDecryptorAESWithIV,
+    ConfigDecryptorAESECB,
     ConfigDecryptorDecryptXOR,
     ConfigDecryptorRandomHardcoded,
     ConfigDecryptorPlaintext,
@@ -43,8 +43,8 @@ __all__ = [
 
 # ConfigDecryptorPlaintext should always be the last fallthrough case
 SUPPORTED_DECRYPTORS = [
-    ConfigDecryptorECB,
-    ConfigDecryptorAES,
+    ConfigDecryptorAESWithIV,
+    ConfigDecryptorAESECB,
     ConfigDecryptorDecryptXOR,
     ConfigDecryptorRandomHardcoded,
     ConfigDecryptorPlaintext,
