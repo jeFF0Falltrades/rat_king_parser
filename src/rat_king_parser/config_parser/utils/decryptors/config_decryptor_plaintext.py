@@ -56,6 +56,7 @@ KNOWN_CONFIG_FIELD_NAMES = set(
         "EncryptionKey",
         "Groub",
         "Group",
+        "GroupTag",
         "HIDEFILE",
         "HIDEINSTALLSUBDIRECTORY",
         "HIDELOGDIRECTORY",
