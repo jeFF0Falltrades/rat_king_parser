@@ -45,6 +45,7 @@ KNOWN_CONFIG_FIELD_NAMES = set(
         "Anti_Process",
         "BDOS",
         "BS_OD",
+        "ClientFullPath",
         "Certifi_cate",
         "Certificate",
         "DIRECTORY",
