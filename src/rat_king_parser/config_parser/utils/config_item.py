@@ -134,15 +134,11 @@ class SpecialFolderConfigItem(ConfigItem):
 
 class EncryptedStringConfigItem(ConfigItem):
     def __init__(self) -> None:
-        super().__init__("encrypted string", b"\x72(.{3}\x70)\x80(.{3}\x04)")
+        super().__init__("encrypted string", b"\x72(.{3}\x70)\x80(.{3}\x04)|\x72(.{3}\x70)\\x28.{4}\x80(.{3}\x04)")
 
     # Returns the encrypted string's RVA
     def _derive_item_value(self, enc_str_rva: bytes) -> int:
         return bytes_to_int(enc_str_rva)
-
-class EncryptedStringConfigItem2(ConfigItem):
-    def __init__(self) -> None:
-        super().__init__("encypted string2", b"\x72(.{3}\x70)\\x28.{4}\x80(.{3}\x04)")
 
     # Returns the encrypted string's RVA
     def _derive_item_value(self, enc_str_rva: bytes) -> int:
@@ -156,5 +152,4 @@ SUPPORTED_CONFIG_ITEMS = [
     NullConfigItem,
     SpecialFolderConfigItem,
     EncryptedStringConfigItem,
-    EncryptedStringConfigItem2,
 ]

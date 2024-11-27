@@ -110,7 +110,7 @@ class RATConfigParser:
             }
 
             if len(item_data) > 0:
-                if type(item) in (config_item.EncryptedStringConfigItem, config_item.EncryptedStringConfigItem2):
+                if type(item) is config_item.EncryptedStringConfigItem:
                     # Translate config value RVAs to string values
                     for k in item_data:
                         item_data[k] = self._dnpp.user_string_from_rva(item_data[k])
