@@ -77,8 +77,7 @@ class RKPMACO(extractor.Extractor):
         self, stream: typing.BinaryIO, matches: typing.List[Match]
     ) -> typing.Optional[model.ExtractorModel]:
         report = RATConfigParser(
-            load(str(Path(__file__).parent / YARC_PATH)),
-            data=stream.read()
+            load(str(Path(__file__).parent / YARC_PATH)), data=stream.read()
         ).report
 
         # Check if exception occurred within RKP parsing

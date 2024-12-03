@@ -27,11 +27,11 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+from collections import OrderedDict
 from logging import getLogger
 from os.path import isfile
 from re import DOTALL, compile, search
 from typing import Any, Tuple
-from collections import OrderedDict
 
 from yara import Rules
 
@@ -57,7 +57,13 @@ class RATConfigParser:
         rb"\x7e.{3}\x04(?:\x6f.{3}\x0a){2}\x74.{3}\x01", DOTALL
     )
 
-    def __init__(self, file_path: str = "", yara_rule: Rules = None, data: bytes = None, remap_config: bool = False) -> None:
+    def __init__(
+        self,
+        file_path: str = "",
+        yara_rule: Rules = None,
+        data: bytes = None,
+        remap_config: bool = False,
+    ) -> None:
         self.report = {
             "file_path": file_path,
             "sha256": "",
@@ -68,7 +74,6 @@ class RATConfigParser:
         }
         self.remap_config = remap_config
         try:
-
             if not data and not isfile(file_path):
                 raise ConfigParserException("File not found")
             # Filled in _decrypt_and_decode_config()

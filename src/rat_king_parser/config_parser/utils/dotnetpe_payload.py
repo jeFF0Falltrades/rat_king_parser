@@ -53,7 +53,9 @@ class DotNetPEMethod:
 
 
 class DotNetPEPayload:
-    def __init__(self, file_path: str, yara_rule: Rules = None, data: bytes = None) -> None:
+    def __init__(
+        self, file_path: str, yara_rule: Rules = None, data: bytes = None
+    ) -> None:
         self.file_path = file_path
         self.data = data
         if not self.data:
