@@ -27,6 +27,7 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+from collections import OrderedDict
 from logging import getLogger
 from os.path import isfile
 from re import DOTALL, compile, search
@@ -56,7 +57,13 @@ class RATConfigParser:
         rb"\x7e.{3}\x04(?:\x6f.{3}\x0a){2}\x74.{3}\x01", DOTALL
     )
 
-    def __init__(self, file_path: str, yara_rule: Rules = None) -> None:
+    def __init__(
+        self,
+        file_path: str = "",
+        yara_rule: Rules = None,
+        data: bytes = None,
+        remap_config: bool = False,
+    ) -> None:
         self.report = {
             "file_path": file_path,
             "sha256": "",
@@ -65,13 +72,14 @@ class RATConfigParser:
             "salt": "",
             "config": {},
         }
+        self.remap_config = remap_config
         try:
-            if not isfile(file_path):
+            if not data and not isfile(file_path):
                 raise ConfigParserException("File not found")
             # Filled in _decrypt_and_decode_config()
             self._incompatible_decryptors: list[int] = []
             try:
-                self._dnpp = DotNetPEPayload(file_path, yara_rule)
+                self._dnpp = DotNetPEPayload(file_path, yara_rule, data)
             except Exception as e:
                 raise e
             self.report["sha256"] = self._dnpp.sha256
@@ -102,11 +110,14 @@ class RATConfigParser:
 
         for item_class in config_item.SUPPORTED_CONFIG_ITEMS:
             item = item_class()
+            config_fields_map = {}
             # Translate config Field RVAs to Field names
-            item_data = {
-                self._dnpp.field_name_from_rva(k): v
-                for k, v in item.parse_from(encrypted_config).items()
-            }
+            item_data = {}
+            # Translate config Field RVAs to Field names
+            for k, v in item.parse_from(encrypted_config).items():
+                field_name = self._dnpp.field_name_from_rva(k)
+                config_fields_map[k] = field_name
+                item_data[field_name] = v
 
             if len(item_data) > 0:
                 if type(item) in (config_item.EncryptedStringConfigItem, config_item.EncryptedStringConfigItem2):
@@ -160,6 +171,12 @@ class RATConfigParser:
             raise ConfigParserException(
                 f"Minimum threshold of config items not met: {len(decoded_config)}/{min_config_len}"
             )
+        if self.remap_config:
+            sorted_decoded_config = OrderedDict()
+            for k in sorted(config_fields_map.keys()):
+                key_name = config_fields_map[k]
+                sorted_decoded_config[key_name] = decoded_config[key_name]
+            return sorted_decoded_config
         return decoded_config
 
     # Searches for the RAT configuration section, using the VerifyHash() marker
