@@ -84,6 +84,7 @@ KNOWN_CONFIG_FIELD_NAMES = set(
         "Mutex",
         "Paste_bin",
         "Pastebin",
+        "PasteUrl",
         "Por_ts",
         "Port",
         "Ports",
