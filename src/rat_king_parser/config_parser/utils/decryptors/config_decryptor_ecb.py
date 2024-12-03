@@ -208,8 +208,6 @@ class ConfigDecryptor3DES(ConfigDecryptor):
         else:
             key_mdtoken = key_hit.groups()[0]
             if key_mdtoken:
-                self.key = self._payload.get_string_from_mdtoken(key_mdtoken)
-                self.key = self._derive_key(self.key)
-                key_rva = self.key
+                key_rva = bytes_to_int(key_mdtoken)
 
         return key_rva
