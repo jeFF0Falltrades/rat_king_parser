@@ -140,10 +140,6 @@ class EncryptedStringConfigItem(ConfigItem):
     def _derive_item_value(self, enc_str_rva: bytes) -> int:
         return bytes_to_int(enc_str_rva)
 
-    # Returns the encrypted string's RVA
-    def _derive_item_value(self, enc_str_rva: bytes) -> int:
-        return bytes_to_int(enc_str_rva)
-
 
 SUPPORTED_CONFIG_ITEMS = [
     BoolConfigItem,
