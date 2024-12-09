@@ -29,14 +29,16 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 from abc import ABC, abstractmethod
-from logging import getLogger
+import logging
 from re import DOTALL, compile, findall
 from typing import Any, Tuple
 
 from .data_utils import bytes_to_int
 from .dotnet_constants import OPCODE_LDC_I4_0, SpecialFolder
 
-logger = getLogger(__name__)
+# logging.basicConfig()
+logger = logging.getLogger(__name__)
+# logger.setLevel(logging.DEBUG)
 
 
 # Provides an abstract class for config items
@@ -68,9 +70,7 @@ class ConfigItem(ABC):
                 fields[field_rva] = field_value
                 found_items += 1
             else:
-                logger.debug(
-                    f"Overlapping Field RVAs detected in config at {hex(field_rva)}"
-                )
+                logger.debug(f"Overlapping Field RVAs detected in config at {hex(field_rva)}")
         logger.debug(f"Parsed {found_items} {self._label} values")
         return fields
 
@@ -134,7 +134,16 @@ class SpecialFolderConfigItem(ConfigItem):
 
 class EncryptedStringConfigItem(ConfigItem):
     def __init__(self) -> None:
-        super().__init__("encrypted string", b"\x72(.{3}\x70)\x80(.{3}\x04)|\x72(.{3}\x70)\\x28.{4}\x80(.{3}\x04)")
+        super().__init__("encrypted string", b"\x72(:?.{3}\x70)\x80(:?.{3}\x04)")
+
+    # Returns the encrypted string's RVA
+    def _derive_item_value(self, enc_str_rva: bytes) -> int:
+        return bytes_to_int(enc_str_rva)
+
+
+class EncryptedStringConfigItem2(ConfigItem):
+    def __init__(self) -> None:
+        super().__init__("encrypted string", rb"\x72(.{3}\x70)\x28.{4}\x80(.{3}\x04)")
 
     # Returns the encrypted string's RVA
     def _derive_item_value(self, enc_str_rva: bytes) -> int:
@@ -148,4 +157,5 @@ SUPPORTED_CONFIG_ITEMS = [
     NullConfigItem,
     SpecialFolderConfigItem,
     EncryptedStringConfigItem,
+    EncryptedStringConfigItem2,
 ]
