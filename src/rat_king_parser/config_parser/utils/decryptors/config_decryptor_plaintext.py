@@ -101,6 +101,7 @@ KNOWN_CONFIG_FIELD_NAMES = set(
         "TAG",
         "TelegramChatID",
         "TelegramToken",
+        "Token",
         "USBNM",
         "VERSION",
         "Ver_sion",
