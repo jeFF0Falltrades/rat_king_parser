@@ -151,8 +151,7 @@ class ConfigDecryptorECB(ConfigDecryptor):
             except Exception as e:
                 raise ConfigParserException(f"Error decrypting ciphertext {ciphertext} with key {self.key.hex()}: {e}")
         else:
-            print(15)
-            raise ("Not identified crypto algorithm")
+            raise("Not identified crypto algorithm")
 
         logger.debug(f"Decryption result: {unpadded_text}")
         return unpadded_text
