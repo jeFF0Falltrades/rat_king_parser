@@ -166,8 +166,6 @@ class ConfigDecryptorECB(ConfigDecryptor):
                 self.key = self._derive_key(encrypted_strings[raw_key_field])
 
             except Exception as e:
-                print("error", e)
-                print(print(raw_key_field, encrypted_strings[raw_key_field]))
                 raise ConfigParserException(f"Failed to derive AES/3DES key: {e}")
 
         decrypted_config_strings = {}
