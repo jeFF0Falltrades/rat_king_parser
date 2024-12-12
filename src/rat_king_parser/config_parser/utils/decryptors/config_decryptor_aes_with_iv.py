@@ -85,10 +85,6 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
         rb"[\x06-\x09]\x20(.{4})\x6f.{4}[\x06-\x09]\x20(.{4})\x6f.{4}[\x06-\x09](.)\x6f.{4}|\x11\x01\x20(.{4})\x28.{4}\x11\x01\x20(.{4})\x6f.{4}\x11\x01(.)\x6f.{4}",
         re.DOTALL,
     )
-    (
-        re.compile(b"[\x06-\x09]\x20(.{4})\x6f.{4}[\x06-\x09]\x20(.{4})\x6f.{4}[\x06-\x09](.)\x6f.{4}", re.DOTALL),
-        re.compile(rb"\x11\x01\x20(.{4})\x28.{4}\x11\x01\x20(.{4})\x6f.{4}\x11\x01(.)\x6f.{4}", re.DOTALL),
-    )
     # Do not re.compile in-line replacement patterns
     _PATTERN_AES_KEY_BASE = b"(.{3}\x04).%b"
     _PATTERN_AES_SALT_INIT = b"\x80%b\x2a"
