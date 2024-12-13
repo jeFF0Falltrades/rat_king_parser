@@ -109,25 +109,26 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
         logger.debug(f"Decrypting {ciphertext} with key {self.key.hex()} and IV {iv.hex()}...")
         if HAVE_CRYPTODOMEX:
             cipher = AES.new(self.key, mode=self.aes_algo, iv=iv)
-            padded_text = cipher.decrypt(ciphertext)
-            try:
-                unpadded_text = unpad(padded_text, AES.block_size)
-            except Exception as e:
-                logger.debug("Failed to unpad: %s", e)
-                raise ConfigParserException(
-                    f"Error decrypting ciphertext {ciphertext} with IV {iv.hex()} and key {self.key.hex()} : {e}"
-                )
+            decrypted_text = cipher.decrypt(ciphertext)
+            if len(decrypted_text) // self._block_size == 0:
+                try:
+                    decrypted_text = unpad(decrypted_text, AES.block_size)
+                except Exception as e:
+                    logger.debug("Failed to unpad: %s", e)
+                    raise ConfigParserException(
+                        f"Error decrypting ciphertext {ciphertext} with IV {iv.hex()} and key {self.key.hex()} : {e}"
+                    )
 
         elif HAVE_CRYPTOGRAPHY:
             aes_cipher = Cipher(AES(self.key), self.aes_algo(iv), backend=default_backend())
             decryptor = aes_cipher.decryptor()
             # Use a PKCS7 unpadder to remove padding from decrypted value
             # https://cryptography.io/en/latest/hazmat/primitives/padding/
-            unpadder = PKCS7(self._block_size).unpadder()
+            decrypted_text = PKCS7(self._block_size).unpadder()
 
             try:
-                padded_text = decryptor.update(ciphertext) + decryptor.finalize()
-                unpadded_text = unpadder.update(padded_text) + unpadder.finalize()
+                decrypted_text = decryptor.update(ciphertext) + decryptor.finalize()
+                decrypted_text = unpadder.update(decrypted_text) + unpadder.finalize()
             except Exception as e:
                 raise ConfigParserException(
                     f"Error decrypting ciphertext {ciphertext} with IV {iv.hex()} and key {self.key.hex()} : {e}"
@@ -135,8 +136,8 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
 
         else:
             raise ConfigParserException("Missed crypto library")
-        logger.debug(f"Decryption result: {unpadded_text}")
-        return unpadded_text
+        logger.debug(f"Decryption result: {decrypted_text}")
+        return decrypted_text
 
     # Derives AES passphrase candidates from a config
     #
