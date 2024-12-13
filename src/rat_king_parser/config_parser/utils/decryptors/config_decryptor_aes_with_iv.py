@@ -110,14 +110,13 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
         if HAVE_CRYPTODOMEX:
             cipher = AES.new(self.key, mode=self.aes_algo, iv=iv)
             decrypted_text = cipher.decrypt(ciphertext)
-            if len(decrypted_text) // self._block_size == 0:
-                try:
-                    decrypted_text = unpad(decrypted_text, AES.block_size)
-                except Exception as e:
-                    logger.debug("Failed to unpad: %s", e)
-                    raise ConfigParserException(
-                        f"Error decrypting ciphertext {ciphertext} with IV {iv.hex()} and key {self.key.hex()} : {e}"
-                    )
+            try:
+                decrypted_text = unpad(decrypted_text, AES.block_size)
+            except Exception as e:
+                logger.debug("Failed to unpad: %s", e)
+                raise ConfigParserException(
+                    f"Error decrypting ciphertext {ciphertext} with IV {iv.hex()} and key {self.key.hex()} : {e}"
+                )
 
         elif HAVE_CRYPTOGRAPHY:
             aes_cipher = Cipher(AES(self.key), self.aes_algo(iv), backend=default_backend())
