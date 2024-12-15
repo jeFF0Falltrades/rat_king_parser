@@ -36,9 +36,7 @@ from typing import Any, Tuple
 from .data_utils import bytes_to_int
 from .dotnet_constants import OPCODE_LDC_I4_0, SpecialFolder
 
-# logging.basicConfig()
 logger = logging.getLogger(__name__)
-# logger.setLevel(logging.DEBUG)
 
 
 # Provides an abstract class for config items
