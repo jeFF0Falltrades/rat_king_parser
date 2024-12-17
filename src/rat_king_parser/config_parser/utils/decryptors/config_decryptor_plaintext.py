@@ -84,6 +84,7 @@ KNOWN_CONFIG_FIELD_NAMES = set(
         "Mutex",
         "Paste_bin",
         "Pastebin",
+        "PasteUrl",
         "Por_ts",
         "Port",
         "Ports",
@@ -100,6 +101,7 @@ KNOWN_CONFIG_FIELD_NAMES = set(
         "TAG",
         "TelegramChatID",
         "TelegramToken",
+        "Token",
         "USBNM",
         "VERSION",
         "Ver_sion",
@@ -107,6 +109,13 @@ KNOWN_CONFIG_FIELD_NAMES = set(
         "delay",
         "mutex_string",
         "startup_name",
+        "UrlHost",
+        "TIPEUSER",
+        "KEYTASKS",
+        "PROYECTO",
+        "WEBVIEW",
+        "PERSISTENCE",
+        "UNINSUADEFEN",
     ]
 )
 

@@ -35,7 +35,7 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
 ]
 dynamic = [ "version" ]
-dependencies = [ "cryptography", "dnfile", "yara-python" ]
+dependencies = [ "dnfile", "pycryptodomex", "yara-python" ]
 
 optional-dependencies.maco = [ "maco", "validators" ]
 urls."Bug Reports" = "https://github.com/jeFF0Falltrades/rat_king_parser/issues"
