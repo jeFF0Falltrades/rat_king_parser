@@ -43,6 +43,7 @@ from .utils.decryptors import (
     IncompatibleDecryptorException,
 )
 from .utils.dotnetpe_payload import DotNetPEPayload
+from .utils.config_normalization import check_key_n_value
 
 logger = getLogger(__name__)
 
@@ -172,7 +173,9 @@ class RATConfigParser:
             sorted_decoded_config = OrderedDict()
             for k in sorted(config_fields_map.keys()):
                 key_name = config_fields_map[k]
-                sorted_decoded_config[key_name] = decoded_config[key_name]
+                value = decoded_config[key_name]
+                key_name, value = check_key_n_value(key_name, value)
+                sorted_decoded_config[key_name] = value
             return sorted_decoded_config
         return decoded_config
 
