@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 #
-# config_decryptor_aes_ecb.py
+# config_decryptor_ecb.py
 #
-# Author: jeFF0Falltrades
+# Author: jeFF0Falltrades & doomedraven
 #
 # Provides a custom AES decryptor for RAT payloads utilizing ECB mode
 #
@@ -31,56 +31,18 @@
 # SOFTWARE.
 from base64 import b64decode
 from hashlib import md5
-import logging
+from logging import getLogger
 from re import DOTALL, compile, search
-from contextlib import suppress
 
-HAVE_CRYPTODOMEX = False
-HAVE_CRYPTOGRAPHY = False
-try:
-    from Cryptodome.Cipher import DES3
-    from Cryptodome.Cipher import AES
-    from Cryptodome.Util.Padding import pad, unpad
-
-    HAVE_CRYPTODOMEX = True
-except ImportError:
-    with suppress(ImportError):
-        from cryptography.hazmat.backends import default_backend
-        from cryptography.hazmat.primitives.ciphers import Cipher
-        from cryptography.hazmat.primitives.ciphers.modes import ECB
-        from cryptography.hazmat.primitives.padding import PKCS7
-        from cryptography.hazmat.primitives.ciphers.algorithms import AES
-
-        try:
-            from cryptography.hazmat.decrepit.ciphers.algorithms import TripleDES
-        except ImportError:
-            # from cryptography.hazmat.primitives.ciphers.algorithms import AES
-            # To be deprecated in 48, moved in 43
-            # https://cryptography.io/en/latest/hazmat/decrepit/ciphers/
-            from cryptography.hazmat.primitives.ciphers.algorithms import TripleDES
-        HAVE_CRYPTOGRAPHY = True
+from Cryptodome.Cipher import AES, DES3
+from Cryptodome.Util.Padding import unpad
 
 from ...config_parser_exception import ConfigParserException
 from ..data_utils import bytes_to_int, decode_bytes
 from ..dotnetpe_payload import DotNetPEPayload
 from .config_decryptor import ConfigDecryptor, IncompatibleDecryptorException
 
-# logging.basicConfig()
-logger = logging.getLogger(__name__)
-
-"""
-# ToDo this detects AES
-re_config_crypt_aes = (
-    rb"(\x08|\x07)"
-    rb"\x20(\x80\x00|\x00\x01)\x00\x00"  # 128 or 256 bits
-    rb"\x6f...\x0a"
-    rb"(\x08|\x07)"
-    rb"\x20\x80\x00\x00\x00"
-    rb"\x6f...\x0a"
-    rb"(\x08|\x07)"
-    rb"(.)"
-)
-"""
+logger = getLogger(__name__)
 
 
 class ConfigDecryptorECB(ConfigDecryptor):
@@ -108,62 +70,40 @@ class ConfigDecryptorECB(ConfigDecryptor):
     # Given ciphertext, creates a Cipher object with the AES/3DES key and decrypts
     # the ciphertext
     def _decrypt(self, ciphertext: bytes) -> bytes:
-        unpadded_text = ""
-        if HAVE_CRYPTODOMEX:
-            if self.is_AES:
-                cipher = AES.new(self.key, mode=AES.MODE_ECB)
-                block_size = AES.block_size
-            elif self.is_3DES:
-                cipher = DES3.new(self.key, mode=DES3.MODE_ECB)
-                block_size = DES3.block_size
+        if self.is_AES:
+            cipher = AES.new(self.key, mode=AES.MODE_ECB)
+            block_size = AES.block_size
+        elif self.is_3DES:
+            cipher = DES3.new(self.key, mode=DES3.MODE_ECB)
+            block_size = DES3.block_size
 
+        try:
+            unpadded_text = ""
+            padded_text = cipher.decrypt(ciphertext)
             try:
-                padded_text = cipher.decrypt(ciphertext)
-            except ValueError:
-                padded_text = cipher.decrypt(pad(ciphertext, block_size))
-            try:
+                # Attempt to unpad first
                 unpadded_text = unpad(padded_text, block_size)
-            except ValueError as e:
-                # Might be not padded
-                logger.debug("error unpadding: %s", e)
-                return None
-        elif HAVE_CRYPTOGRAPHY:
-            if self.is_AES:
-                algo = AES(self.key)
-                block_size = AES.block_size
-            elif self.is_3DES:
-                algo = TripleDES(self.key)
-                block_size = TripleDES.block_size
-
-            algo_cipher = Cipher(algo, ECB(), backend=default_backend())
-            decryptor = algo_cipher.decryptor()
-            # Use a PKCS7 unpadder to remove padding from decrypted value
-            # https://cryptography.io/en/latest/hazmat/primitives/padding/
-            unpadder = PKCS7(block_size).unpadder()
-
-            try:
-                padded_text = decryptor.update(ciphertext) + decryptor.finalize()
-                try:
-                    unpadded_text = unpadder.update(padded_text) + unpadder.finalize()
-                except ValueError:
-                    # Might be not padded
-                    return None
-            except Exception as e:
-                raise ConfigParserException(f"Error decrypting ciphertext {ciphertext} with key {self.key.hex()}: {e}")
-        else:
-            raise("Not identified crypto algorithm")
+            except ValueError:
+                # If unpadding fails, it might be unpadded
+                # Remove trailing null bytes (common in some implementations)
+                unpadded_text = padded_text.rstrip(b"\x00")
+        except Exception as e:
+            raise ConfigParserException(
+                f"Error decrypting ciphertext {ciphertext} with key {self.key.hex()}: {e}"
+            )
 
         logger.debug(f"Decryption result: {unpadded_text}")
         return unpadded_text
 
     # Decrypts encrypted config values with the provided cipher data
-    def decrypt_encrypted_strings(self, encrypted_strings):  # dict[str, str]):  -> dict[str, str]:
+    def decrypt_encrypted_strings(
+        self, encrypted_strings: dict[str, str]
+    ) -> dict[str, str]:
         logger.debug("Decrypting encrypted strings...")
-        if not self.key:
+        if self.key is None:
             try:
                 raw_key_field = self._payload.field_name_from_rva(self._key_rva)
                 self.key = self._derive_key(encrypted_strings[raw_key_field])
-
             except Exception as e:
                 raise ConfigParserException(f"Failed to derive AES/3DES key: {e}")
 
@@ -204,46 +144,28 @@ class ConfigDecryptorECB(ConfigDecryptor):
         logger.debug("Successfully decrypted strings")
         return decrypted_config_strings
 
-    # Given the raw bytes that will become the key value, derives the AES/3DES key
+    # Given the raw bytes that will become the key value, derives the key
     def _derive_key(self, key_unhashed: str) -> bytes:
         # Generate the MD5 hash
         md5_hash = md5()
         md5_hash.update(key_unhashed.encode("utf-8"))
         md5_digest = md5_hash.digest()
 
-        # Key is a 32-byte(AES not 3DES) value made up of the MD5 hash overlaying itself,
+        # AES key is a 32-byte value made up of the MD5 hash overlaying itself,
         # tailed with one null byte
-        if self.is_AES:
-            key = md5_digest[:15] + md5_digest[:16] + b"\x00"
-        elif self.is_3DES:
-            key = md5_digest
-        # Key is a 32-byte value made up of the MD5 hash overlaying itself,
-        # tailed with one null byte
-        # key = md5_digest + md5_digest[:8]
+        key = md5_digest[:15] + md5_digest[:16] + b"\x00" if self.is_AES else md5_digest
         logger.debug(f"Key derived: {key}")
         return key
 
     # Extracts the AES/3DES key RVA from the payload
     def _get_key_rva(self) -> int:
-        logger.debug("Extracting AES/3Des key value...")
+        logger.debug("Extracting AES/3DES key value...")
         key_hit = search(self._PATTERN_MD5_HASH, self._payload.data)
-        # Hardcoded key in function. Getting MdToken
-        hardcoded = False
-        if not key_hit:
+        if key_hit is None:
             key_hit = search(self._PATTERN_HARDCODED_KEY, self._payload.data)
-            if key_hit:
-                hardcoded = True
-        if not key_hit:
+        if key_hit is None:
             raise ConfigParserException("Could not find AES/3DES key pattern")
 
-        if not hardcoded:
-            key_rva = bytes_to_int(key_hit.groups()[0])
-            logger.debug(f"AES/3DES key RVA: {hex(key_rva)}")
-        else:
-            key_mdtoken = key_hit.groups()[0]
-            if key_mdtoken:
-                self.key = self._payload.user_string_from_rva(bytes_to_int(key_mdtoken))
-                self.key = self._derive_key(self.key)
-                key_rva = self.key
-
+        key_rva = bytes_to_int(key_hit.groups()[0])
+        logger.debug(f"AES/3DES key RVA: {hex(key_rva)}")
         return key_rva

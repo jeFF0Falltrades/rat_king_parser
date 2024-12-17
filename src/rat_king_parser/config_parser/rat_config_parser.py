@@ -27,11 +27,12 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-import logging
+from collections import OrderedDict
+from logging import getLogger
 from os.path import isfile
 from re import DOTALL, compile, search
 from typing import Any, Tuple
-from collections import OrderedDict
+
 from yara import Rules
 
 from .config_parser_exception import ConfigParserException
@@ -43,7 +44,7 @@ from .utils.decryptors import (
 )
 from .utils.dotnetpe_payload import DotNetPEPayload
 
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 
 
 class RATConfigParser:
@@ -51,10 +52,18 @@ class RATConfigParser:
     _MIN_CONFIG_LEN_FLOOR = 5
     _MIN_CONFIG_LEN_CEILING = 9
 
-    _PATTERN_VERIFY_HASH = compile(rb"\x7e.{3}\x04(?:\x6f.{3}\x0a){2}\x74.{3}\x01", DOTALL)
-    # |\x73.{3}\x0A\x80.{3}\x04(?:\x28.{3}\x06){2}\x2A
+    # Pattern to find the VerifyHash() method
+    _PATTERN_VERIFY_HASH = compile(
+        rb"\x7e.{3}\x04(?:\x6f.{3}\x0a){2}\x74.{3}\x01", DOTALL
+    )
 
-    def __init__(self, file_path: str = "", yara_rule: Rules = None, data: bytes = None, remap_config: bool = False) -> None:
+    def __init__(
+        self,
+        file_path: str = "",
+        yara_rule: Rules = None,
+        data: bytes = None,
+        remap_config: bool = False,
+    ) -> None:
         self.report = {
             "file_path": file_path,
             "sha256": "",
@@ -65,7 +74,7 @@ class RATConfigParser:
         }
         self.remap_config = remap_config
         try:
-            if not data and not isfile(file_path):
+            if data is None and not isfile(file_path):
                 raise ConfigParserException("File not found")
             # Filled in _decrypt_and_decode_config()
             self._incompatible_decryptors: list[int] = []
@@ -80,17 +89,23 @@ class RATConfigParser:
             self._decryptor: ConfigDecryptor = None
             self.report["config"] = self._get_config()
             self.report["key"] = (
-                self._decryptor.key.hex() if self._decryptor is not None and self._decryptor.key is not None else "None"
+                self._decryptor.key.hex()
+                if self._decryptor is not None and self._decryptor.key is not None
+                else "None"
             )
             self.report["salt"] = (
-                self._decryptor.salt.hex() if self._decryptor is not None and self._decryptor.salt is not None else "None"
+                self._decryptor.salt.hex()
+                if self._decryptor is not None and self._decryptor.salt is not None
+                else "None"
             )
         except Exception as e:
             self.report["config"] = f"Exception encountered for {file_path}: {e}"
 
     # Decrypts/decodes values from an encrypted config and returns the
     # decrypted/decoded config
-    def _decrypt_and_decode_config(self, encrypted_config: bytes, min_config_len: int) -> dict[str, Any]:
+    def _decrypt_and_decode_config(
+        self, encrypted_config: bytes, min_config_len: int
+    ) -> dict[str, Any]:
         decoded_config = {}
         config_fields_map = {}
 
@@ -103,7 +118,8 @@ class RATConfigParser:
                 config_fields_map[k] = field_name
                 item_data[field_name] = v
             if len(item_data) > 0:
-                if item.__class__.__name__.startswith("EncryptedStringConfigItem"):
+                if type(item) is config_item.EncryptedStringConfigItem:
+                    # Translate config value RVAs to string values
                     for k in item_data:
                         item_data[k] = self._dnpp.user_string_from_rva(item_data[k])
 
@@ -112,22 +128,28 @@ class RATConfigParser:
                         if decryptor in self._incompatible_decryptors:
                             continue
 
-                        if not self._decryptor:
+                        if self._decryptor is None:
                             # Try to instantiate the selected decryptor
                             # Add to incompatible list and move on upon failure
                             try:
                                 self._decryptor = decryptor(self._dnpp)
                             except IncompatibleDecryptorException as ide:
-                                logger.debug(f"Decryptor incompatible {decryptor} : {ide}")
+                                logger.debug(
+                                    f"Decryptor incompatible {decryptor} : {ide}"
+                                )
                                 self._incompatible_decryptors.append(decryptor)
                                 continue
                         try:
                             # Try to decrypt the encrypted strings
                             # Continue to next compatible decryptor on failure
-                            item_data = self._decryptor.decrypt_encrypted_strings(item_data)
+                            item_data = self._decryptor.decrypt_encrypted_strings(
+                                item_data
+                            )
                             break
                         except Exception as e:
-                            logger.debug(f"Decryption failed with decryptor {decryptor} : {e}")
+                            logger.debug(
+                                f"Decryption failed with decryptor {decryptor} : {e}"
+                            )
                             self._decryptor = None
 
                     if self._decryptor is None:
@@ -136,11 +158,16 @@ class RATConfigParser:
                 elif type(item) is config_item.ByteArrayConfigItem:
                     for k in item_data:
                         arr_size, arr_rva = item_data[k]
-                        item_data[k] = self._dnpp.byte_array_from_size_and_rva(arr_size, arr_rva).hex()
+                        item_data[k] = self._dnpp.byte_array_from_size_and_rva(
+                            arr_size, arr_rva
+                        ).hex()
 
                 decoded_config.update(item_data)
+        # UrlHost is a marker of a special case until this can be standardized
         if len(decoded_config) < min_config_len and "UrlHost" not in item_data:
-            raise ConfigParserException(f"Minimum threshold of config items not met: {len(decoded_config)}/{min_config_len}")
+            raise ConfigParserException(
+                f"Minimum threshold of config items not met: {len(decoded_config)}/{min_config_len}"
+            )
         if self.remap_config:
             sorted_decoded_config = OrderedDict()
             for k in sorted(config_fields_map.keys()):
@@ -155,7 +182,7 @@ class RATConfigParser:
         logger.debug("Extracting config...")
         try:
             config_start, decrypted_config = self._get_config_verify_hash_method()
-        except Exception as e:
+        except Exception:
             logger.debug("VerifyHash() method failed; Attempting .cctor brute force...")
             # If the VerifyHash() method does not work, move to brute-forcing
             # static constructors
@@ -176,7 +203,10 @@ class RATConfigParser:
             raise ConfigParserException("No .cctor method could be found")
 
         # For each .cctor method, map its RVA and body (in raw bytes)
-        candidate_cctor_data = {method.rva: self._dnpp.method_body_from_method(method) for method in candidates}
+        candidate_cctor_data = {
+            method.rva: self._dnpp.method_body_from_method(method)
+            for method in candidates
+        }
 
         config_start, decrypted_config = None, None
         # Start at our ceiling value for number of config items
@@ -184,7 +214,9 @@ class RATConfigParser:
 
         while decrypted_config is None and min_config_len >= self._MIN_CONFIG_LEN_FLOOR:
             for method_rva, method_body in candidate_cctor_data.items():
-                logger.debug(f"Attempting brute force at .cctor method at {hex(method_rva)}")
+                logger.debug(
+                    f"Attempting brute force at .cctor method at {hex(method_rva)}"
+                )
                 try:
                     config_start, decrypted_config = (
                         method_rva,
@@ -192,13 +224,17 @@ class RATConfigParser:
                     )
                     break
                 except Exception as e:
-                    logger.debug(f"Brute force failed for method at {hex(method_rva)}: {e}")
+                    logger.debug(
+                        f"Brute force failed for method at {hex(method_rva)}: {e}"
+                    )
                     continue
             # Reduce the minimum config length until we reach our floor
             min_config_len -= 1
 
         if decrypted_config is None:
-            raise ConfigParserException("No valid configuration could be parsed from any .cctor methods")
+            raise ConfigParserException(
+                "No valid configuration could be parsed from any .cctor methods"
+            )
         return config_start, decrypted_config
 
     # Attempts to retrieve the config via looking for a config section preceded
@@ -208,17 +244,20 @@ class RATConfigParser:
         # Identify the VerifyHash() Method code
         verify_hash_hit = search(self._PATTERN_VERIFY_HASH, self._dnpp.data)
         if verify_hash_hit is None:
-            # sys.exit()
             raise ConfigParserException("Could not identify VerifyHash() marker")
 
         # Reverse the hit to find the VerifyHash() method, then grab the
         # subsequent function
-        config_method = self._dnpp.method_from_instruction_offset(verify_hash_hit.start(), 1)
+        config_method = self._dnpp.method_from_instruction_offset(
+            verify_hash_hit.start(), 1
+        )
         encrypted_config = self._dnpp.method_body_from_method(config_method)
         min_config_len = self._MIN_CONFIG_LEN_CEILING
         while True:
             try:
-                decrypted_config = self._decrypt_and_decode_config(encrypted_config, min_config_len)
+                decrypted_config = self._decrypt_and_decode_config(
+                    encrypted_config, min_config_len
+                )
                 return config_method.rva, decrypted_config
             except Exception as e:
                 # Reduce the minimum config length until we reach our floor
