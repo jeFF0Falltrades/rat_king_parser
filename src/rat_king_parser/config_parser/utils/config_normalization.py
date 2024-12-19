@@ -46,7 +46,7 @@ def check_key_n_value(key, value):
             key = k
             break
 
-    if key in ("Hosts", "Ports") and not value in ("null", "false") and not isinstance(value, list) and isinstance(value, str):
+    if key in ("Hosts", "Ports") and not value in ("null", "false") and isinstance(value, str):
         splitter = ","
         if ";" in value:
             splitter = ";"
