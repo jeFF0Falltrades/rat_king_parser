@@ -134,7 +134,9 @@ class SpecialFolderConfigItem(ConfigItem):
 
 class EncryptedStringConfigItem(ConfigItem):
     def __init__(self) -> None:
-        super().__init__("encrypted string", b"\x72(.{3}\x70)\x80(.{3}\x04)")
+        super().__init__(
+            "encrypted string", rb"\x72(.{3}\x70)(?:\x28.{4})?\x80(.{3}\x04)"
+        )
 
     # Returns the encrypted string's RVA
     def _derive_item_value(self, enc_str_rva: bytes) -> int:
