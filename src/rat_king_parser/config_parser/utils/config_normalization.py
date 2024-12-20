@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 #
-# __init__.py
+# config_normalization.py
 #
-# Author: jeFF0Falltrades
+# Authors: doomedraven/jeFF0Falltrades
+#
+# Provides a utility class for parsing field names and values of various types
+# from raw RAT config data
+#
+# MIT License
 #
 # Copyright (c) 2024 Jeff Archer
 #
@@ -23,28 +28,32 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-from .config_decryptor import ConfigDecryptor, IncompatibleDecryptorException
-from .config_decryptor_aes_with_iv import ConfigDecryptorAESWithIV
-from .config_decryptor_decrypt_xor import ConfigDecryptorDecryptXOR
-from .config_decryptor_ecb import ConfigDecryptorECB
-from .config_decryptor_plaintext import ConfigDecryptorPlaintext
-from .config_decryptor_random_hardcoded import ConfigDecryptorRandomHardcoded
+from typing import Any
 
-__all__ = [
-    ConfigDecryptor,
-    IncompatibleDecryptorException,
-    ConfigDecryptorAESWithIV,
-    ConfigDecryptorECB,
-    ConfigDecryptorDecryptXOR,
-    ConfigDecryptorRandomHardcoded,
-    ConfigDecryptorPlaintext,
-]
+normalized_keys = {
+    "Hosts": ("HOSTS", "Hosts", "ServerIp", "hardcodedhosts", "PasteUrl"),
+    "Ports": ("Port", "Ports", "ServerPort"),
+    "Mutex": ("MTX", "MUTEX", "Mutex"),
+    "Version": ("VERSION", "Version"),
+    "Key": ("Key", "key", "EncryptionKey", "ENCRYPTIONKEY"),
+    "Group": ("Group", "Groub", "GroupTag", "TAG"),
+}
 
-# ConfigDecryptorPlaintext should always be the last fallthrough case
-SUPPORTED_DECRYPTORS = [
-    ConfigDecryptorAESWithIV,
-    ConfigDecryptorECB,
-    ConfigDecryptorDecryptXOR,
-    ConfigDecryptorRandomHardcoded,
-    ConfigDecryptorPlaintext,
-]
+
+# Normalizes config keys/values for easier mapping
+def check_key_n_value(key: str, value: Any) -> tuple[str, Any]:
+    key_normalized = key.replace("_", "")
+    for k, v in normalized_keys.items():
+        if key_normalized in v:
+            key = k
+            break
+
+    if (
+        key in ("Hosts", "Ports")
+        and isinstance(value, str)
+        and value not in ("null", "false")
+    ):
+        splitter = "," if "," in value else ";"
+        value = list(filter(None, value.split(splitter)))
+
+    return key, value

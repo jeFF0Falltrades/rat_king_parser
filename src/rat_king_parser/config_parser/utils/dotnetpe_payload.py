@@ -58,7 +58,7 @@ class DotNetPEPayload:
     ) -> None:
         self.file_path = file_path
         self.data = data
-        if not self.data:
+        if self.data is None:
             self.data = self._get_file_data()
 
         # Calculate SHA256
