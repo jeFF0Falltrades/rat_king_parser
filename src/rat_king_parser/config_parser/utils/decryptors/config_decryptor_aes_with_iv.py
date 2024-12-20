@@ -92,16 +92,11 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
 
         cipher = AES.new(self.key, mode=self._aes_algo, iv=iv)
 
+        unpadded_text = ""
+        padded_text = cipher.decrypt(ciphertext)
         try:
-            unpadded_text = ""
-            padded_text = cipher.decrypt(ciphertext)
-            try:
-                # Attempt to unpad first
-                unpadded_text = unpad(padded_text, AES.block_size)
-            except ValueError:
-                # If unpadding fails, it might be unpadded
-                # Remove trailing null bytes (common in some implementations)
-                unpadded_text = padded_text.rstrip(b"\x00")
+            # Attempt to unpad first
+            unpadded_text = unpad(padded_text, AES.block_size)
         except Exception as e:
             raise ConfigParserException(
                 f"Error decrypting ciphertext {ciphertext} with IV {iv.hex()} and key {self.key.hex()} : {e}"

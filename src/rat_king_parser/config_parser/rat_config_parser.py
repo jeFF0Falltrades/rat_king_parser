@@ -37,13 +37,13 @@ from yara import Rules
 
 from .config_parser_exception import ConfigParserException
 from .utils import config_item
+from .utils.config_normalization import check_key_n_value
 from .utils.decryptors import (
     SUPPORTED_DECRYPTORS,
     ConfigDecryptor,
     IncompatibleDecryptorException,
 )
 from .utils.dotnetpe_payload import DotNetPEPayload
-from .utils.config_normalization import check_key_n_value
 
 logger = getLogger(__name__)
 
@@ -171,11 +171,22 @@ class RATConfigParser:
             )
         if self.remap_config:
             sorted_decoded_config = OrderedDict()
+            normalized_fields = []
             for k in sorted(config_fields_map.keys()):
                 key_name = config_fields_map[k]
                 value = decoded_config[key_name]
-                key_name, value = check_key_n_value(key_name, value)
-                sorted_decoded_config[key_name] = value
+                key_normalized, value = check_key_n_value(key_name, value)
+                if key_normalized != key_name:
+                    normalized_fields.append(key_name)
+                sorted_decoded_config[key_normalized] = value
+            # Ensure config items added by decryptors dynamically are preserved
+            sorted_decoded_config.update(
+                {
+                    key: decoded_config[key]
+                    for key in decoded_config
+                    if key not in config_fields_map and key not in normalized_fields
+                }
+            )
             return sorted_decoded_config
         return decoded_config
 

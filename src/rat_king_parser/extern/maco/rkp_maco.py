@@ -51,15 +51,8 @@ class ConfigValueTypes(Enum):
 
 # Known plaintext config keys mapped to their MACO value types
 MAP_KNOWN_PLAINTEXT_CONFIG_KEYS = {
-    "MTX": ConfigValueTypes.MUTEX,
-    "MUTEX": ConfigValueTypes.MUTEX,
     "Mutex": ConfigValueTypes.MUTEX,
-    "mutex_string": ConfigValueTypes.MUTEX,
-    "Por_ts": ConfigValueTypes.PORT,
-    "Port": ConfigValueTypes.PORT,
     "Ports": ConfigValueTypes.PORT,
-    "VERSION": ConfigValueTypes.VERSION,
-    "Ver_sion": ConfigValueTypes.VERSION,
     "Version": ConfigValueTypes.VERSION,
 }
 
@@ -77,7 +70,9 @@ class RKPMACO(extractor.Extractor):
         self, stream: typing.BinaryIO, matches: typing.List[Match]
     ) -> typing.Optional[model.ExtractorModel]:
         report = RATConfigParser(
-            load(str(Path(__file__).parent / YARC_PATH)), data=stream.read()
+            load(str(Path(__file__).parent / YARC_PATH)),
+            data=stream.read(),
+            remap_config=True,
         ).report
 
         # Check if exception occurred within RKP parsing
@@ -110,7 +105,7 @@ class RKPMACO(extractor.Extractor):
                         rkp_model.tcp.extend(
                             [
                                 rkp_model.Connection(server_port=port)
-                                for port in v.split(",")
+                                for port in v
                                 if port.isdigit()
                             ]
                         )
