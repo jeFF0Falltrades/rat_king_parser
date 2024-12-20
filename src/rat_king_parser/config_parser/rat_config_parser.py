@@ -184,7 +184,7 @@ class RATConfigParser:
                 {
                     key: decoded_config[key]
                     for key in decoded_config
-                    if key not in config_fields_map and key not in normalized_fields
+                    if key not in sorted_decoded_config and key not in normalized_fields
                 }
             )
             return sorted_decoded_config
