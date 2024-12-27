@@ -33,7 +33,7 @@ from typing import Any
 normalized_keys = {
     "Hosts": ("HOSTS", "Hosts", "ServerIp", "hardcodedhosts", "PasteUrl"),
     "Ports": ("Port", "Ports", "ServerPort"),
-    "Mutex": ("MTX", "MUTEX", "Mutex"),
+    "Mutex": ("MTX", "MUTEX", "Mutex", "mutex_string"),
     "Version": ("VERSION", "Version"),
     "Key": ("Key", "key", "EncryptionKey", "ENCRYPTIONKEY"),
     "Group": ("Group", "Groub", "GroupTag", "TAG"),
@@ -42,18 +42,17 @@ normalized_keys = {
 
 # Normalizes config keys/values for easier mapping
 def check_key_n_value(key: str, value: Any) -> tuple[str, Any]:
-    key_normalized = key.replace("_", "")
+    key = key.replace("_", "")
     for k, v in normalized_keys.items():
-        if key_normalized in v:
+        if key in v:
             key = k
             break
 
-    if (
-        key in ("Hosts", "Ports")
-        and isinstance(value, str)
-        and value not in ("null", "false")
-    ):
-        splitter = "," if "," in value else ";"
-        value = list(filter(None, value.split(splitter)))
+    if key in ("Hosts", "Ports") and isinstance(value, str):
+        if value not in ("null", "false"):
+            splitter = "," if "," in value else ";"
+            value = list(filter(None, value.split(splitter)))
+        else:
+            value = []
 
     return key, value
