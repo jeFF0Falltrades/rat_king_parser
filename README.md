@@ -143,8 +143,14 @@ $ rat-king-parser -n dangerzone/* | jq
     "config": {
       "TelegramToken": "7153134069:AAHd4riTPdhAdVGBwo16vJQ5H3eORu5QAEo",
       "TelegramChatID": "1863892139",
-      "Ports": "6606,7707,8808",
-      "Hosts": "127.0.0.1",
+      "Ports": [
+        "6606",
+        "7707",
+        "8808"
+      ],
+      "Hosts": [
+        "127.0.0.1"
+      ],
       "Version": "",
       "Install": "false",
       "InstallFolder": "%AppData%",
@@ -168,8 +174,12 @@ $ rat-king-parser -n dangerzone/* | jq
     "key": "None",
     "salt": "bfeb1e56fbcd973bb219022430a57843003d5644d21e62b9d4f180e7e6c33941",
     "config": {
-      "Ports": "%Ports%",
-      "Hosts": "%Hosts%",
+      "Ports": [
+        "%Ports%"
+      ],
+      "Hosts": [
+        "%Hosts%"
+      ],
       "Version": "%Version%",
       "Install": "%Install%",
       "InstallFolder": "%Folder%",
@@ -193,8 +203,12 @@ $ rat-king-parser -n dangerzone/* | jq
     "key": "eebdb6b2b00c2501b7b246442a354c5c3d743346e4cc88896ce68485dd6bbb8f",
     "salt": "bfeb1e56fbcd973bb219022430a57843003d5644d21e62b9d4f180e7e6c33941",
     "config": {
-      "Ports": "2400",
-      "Hosts": "minecraftdayzserver.ddns.net",
+      "Ports": [
+        "2400"
+      ],
+      "Hosts": [
+        "minecraftdayzserver.ddns.net"
+      ],
       "Version": "0.5.8",
       "Install": "true",
       "InstallFolder": "%AppData%",
@@ -221,7 +235,8 @@ $ rat-king-parser -n dangerzone/* | jq
       "梽畨芾⇼범䨖ꔭ⧭ㅙ⢄熼ꟿ⼳᷍砫ᡸꟿﾼഹ": "1.3.0.0",
       "ꥄ챥蝝࿙ዷ䑌⭞⿑㦝䜒䖘苘ꃧ읲㚥ᡄ媬": "qztadmin.duckdns.org:9782;",
       "蚹嘪ꜟ쀣쓡爲劄㷟耑츋϶�૥ὂ䲬㺲釺罱恫ῗ": 3000,
-      "姰쭕锓滧ꥀ栞丫갣橶譌窴׮ꄩ邪᷺": "1WvgEMPjdwfqIMeM9MclyQ==",
+      "姰쭕锓
+滧ꥀ栞丫갣橶譌窴׮ꄩ邪᷺": "1WvgEMPjdwfqIMeM9MclyQ==",
       "αХɇらꁶꄕ搩〆ᮍ뽭⩖覮ϕ鷫Ꝧ겈屄롚쐢": "NcFtjbDOcsw7Evd3coMC0y4koy/SRZGydhNmno81ZOWOvdfg7sv0Cj5ad2ROUfX4QMscAIjYJdjrrs41+qcQwg==",
       "맻胼䇸ﳊ㒡蠯칣ᰶ⇷敉謵완瀫ᣣ究హ": "APPLICATIONDATA",
       "딕漩럙褹퍵ᮐ螉뗏흛ᅩ駔졾楝팵᳦ꔍ퓩": "SubDir",
@@ -338,7 +353,9 @@ $ rat-king-parser -n dangerzone/* | jq
     "key": "c527ac2a4eeb6039d9477583d0f4f2c527ac2a4eeb6039d9477583d0f4f2ee00",
     "salt": "None",
     "config": {
-      "Hosts": "act-cleaning.gl.at.ply.gg",
+      "Hosts": [
+        "act-cleaning.gl.at.ply.gg"
+      ],
       "Ports": [
         "37158"
       ],
