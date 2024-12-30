@@ -48,6 +48,7 @@ KNOWN_CONFIG_FIELD_NAMES = set(
         "ClientFullPath",
         "Certifi_cate",
         "Certificate",
+        "CIS_BLOCKING",
         "DIRECTORY",
         "De_lay",
         "Delay",
