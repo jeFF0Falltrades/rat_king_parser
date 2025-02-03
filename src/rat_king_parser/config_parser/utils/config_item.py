@@ -60,6 +60,8 @@ class ConfigItem(ABC):
         for obj, bytes_rva in raw_data:
             try:
                 field_value = self._derive_item_value(obj)
+                if not field_value:
+                    continue
                 field_rva = bytes_to_int(bytes_rva)
             except Exception:
                 logger.debug(f"Could not parse value from {obj} at {hex(bytes_rva)}")
@@ -129,7 +131,11 @@ class SpecialFolderConfigItem(ConfigItem):
 
     # Translates SpecialFolder ID to name
     def _derive_item_value(self, folder_id: bytes) -> str:
-        return SpecialFolder(bytes_to_int(folder_id)).name
+        # When int is not in SpecialFolder, for example Sleep value                                                                                                    
+        try:                                                                                                                                                           
+            return SpecialFolder(bytes_to_int(folder_id)).name                                                                                                         
+        except ValueError:                                                                                                                                             
+            return    
 
 
 class EncryptedStringConfigItem(ConfigItem):
