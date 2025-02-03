@@ -127,13 +127,13 @@ class SpecialFolderConfigItem(ConfigItem):
     def __init__(self) -> None:
         super().__init__("special folder", b"\x1f(.)\x80(.{3}\x04)")
 
-    # Translates SpecialFolder ID to name
+        # Translates SpecialFolder ID to name
     def _derive_item_value(self, folder_id: bytes) -> str:
-        # When int is not in SpecialFolder, for example Sleep value                                                                                                    
-        try:                                                                                                                                                           
-            return SpecialFolder(bytes_to_int(folder_id)).name                                                                                                         
-        except ValueError:                                                                                                                                             
-            return    
+        # When int is not in SpecialFolder, for example Sleep value
+        folder_id = bytes_to_int(folder_id)
+        if folder_id in list(SpecialFolder):
+            return SpecialFolder(folder_id).name
+
 
 
 class EncryptedStringConfigItem(ConfigItem):
