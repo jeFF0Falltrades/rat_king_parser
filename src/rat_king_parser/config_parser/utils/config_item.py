@@ -60,8 +60,6 @@ class ConfigItem(ABC):
         for obj, bytes_rva in raw_data:
             try:
                 field_value = self._derive_item_value(obj)
-                if not field_value:
-                    continue
                 field_rva = bytes_to_int(bytes_rva)
             except Exception:
                 logger.debug(f"Could not parse value from {obj} at {hex(bytes_rva)}")
