@@ -129,8 +129,10 @@ class SpecialFolderConfigItem(ConfigItem):
 
     # Translates SpecialFolder ID to name
     def _derive_item_value(self, folder_id: bytes) -> str:
-        return SpecialFolder(bytes_to_int(folder_id)).name
-
+        try:
+            return SpecialFolder(bytes_to_int(folder_id)).name
+        except ValueError:
+            return None
 
 class EncryptedStringConfigItem(ConfigItem):
     def __init__(self) -> None:
