@@ -4,10 +4,6 @@
 #
 # Author: jeFF0Falltrades
 #
-# Provides a custom AES decryptor for RAT payloads utilizing CBC mode
-#
-# Example Hash: 6b99acfa5961591c39b3f889cf29970c1dd48ddb0e274f14317940cf279a4412
-#
 # MIT License
 #
 # Copyright (c) 2024 Jeff Archer
@@ -33,7 +29,6 @@ import re
 from base64 import b64decode
 from logging import getLogger, DEBUG
 
-# from typing import Tuple
 from Cryptodome.Cipher import AES
 from Cryptodome.Cipher.AES import MODE_CBC as CBC
 from Cryptodome.Protocol.KDF import PBKDF2
@@ -52,7 +47,6 @@ class ConfigDecryptorAESWithIV_pbkdf2(ConfigDecryptor):
     _MIN_CIPHERTEXT_LEN = 16
 
     # Do not re.compile in-line replacement patterns
-    # _PATTERN_AES_SALT_ITER = re.compile(rb"\x28.{3}\x0A\x0B\x72(.{4})\x1f(.)\x8d", re.DOTALL)
     _PATTERN_AES_SALT_ITER = re.compile(rb"\x72(.{4})\x1f(.)\x8d.{4}\x25\xd0(.{4})\x28")
 
     def __init__(self, payload: DotNetPEPayload) -> None:
