@@ -66,6 +66,12 @@ def parse_args() -> Namespace:
     )
     ap.add_argument("-d", "--debug", action="store_true", help="Enable debug logging")
     ap.add_argument(
+        "-n",
+        "--normalize",
+        action="store_true",
+        help="Attempt to translate common variations of config keys to normalized field names",
+    )
+    ap.add_argument(
         "-r",
         "--recompile",
         action="store_true",
@@ -82,7 +88,7 @@ def parse_args() -> Namespace:
 
 # Processes payloads and parses configs, utilizing multiprocessing
 def parse_config(
-    file_path: str, yara_rule_path: str, debug: bool = False
+    file_path: str, yara_rule_path: str, debug: bool = False, normalize: bool = False
 ) -> dict[str, Any]:
     # Since we are utilizing multiprocessing, set up logging once per child
     basicConfig(
@@ -92,7 +98,7 @@ def parse_config(
     # YARA Rules objects cannot be pickled and must be instantiated per
     # subprocess
     rule = load_yara(yara_rule_path)
-    return RATConfigParser(file_path, rule).report
+    return RATConfigParser(file_path, rule, remap_config=normalize).report
 
 
 def main() -> None:
@@ -109,6 +115,7 @@ def main() -> None:
             parsed_args.file_paths,
             repeat(parsed_args.yara),
             repeat(parsed_args.debug),
+            repeat(parsed_args.normalize),
         )
 
     # ProcessPoolExecutor.map() does not block, so we wait until after results

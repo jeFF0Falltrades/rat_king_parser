@@ -30,7 +30,6 @@ from enum import Enum, auto
 from logging import getLogger
 from pathlib import Path
 from re import search
-from tempfile import NamedTemporaryFile
 from typing import Optional
 
 import validators
@@ -52,15 +51,8 @@ class ConfigValueTypes(Enum):
 
 # Known plaintext config keys mapped to their MACO value types
 MAP_KNOWN_PLAINTEXT_CONFIG_KEYS = {
-    "MTX": ConfigValueTypes.MUTEX,
-    "MUTEX": ConfigValueTypes.MUTEX,
     "Mutex": ConfigValueTypes.MUTEX,
-    "mutex_string": ConfigValueTypes.MUTEX,
-    "Por_ts": ConfigValueTypes.PORT,
-    "Port": ConfigValueTypes.PORT,
     "Ports": ConfigValueTypes.PORT,
-    "VERSION": ConfigValueTypes.VERSION,
-    "Ver_sion": ConfigValueTypes.VERSION,
     "Version": ConfigValueTypes.VERSION,
 }
 
@@ -77,12 +69,11 @@ class RKPMACO(extractor.Extractor):
     def run(
         self, stream: typing.BinaryIO, matches: typing.List[Match]
     ) -> typing.Optional[model.ExtractorModel]:
-        with NamedTemporaryFile("w+b") as fh:
-            fh.write(stream.read())
-            fh.flush()
-            report = RATConfigParser(
-                fh.name, load(str(Path(__file__).parent / YARC_PATH))
-            ).report
+        report = RATConfigParser(
+            load(str(Path(__file__).parent / YARC_PATH)),
+            data=stream.read(),
+            remap_config=True,
+        ).report
 
         # Check if exception occurred within RKP parsing
         if isinstance(report["config"], str) and report["config"].startswith(
@@ -114,7 +105,7 @@ class RKPMACO(extractor.Extractor):
                         rkp_model.tcp.extend(
                             [
                                 rkp_model.Connection(server_port=port)
-                                for port in v.split(",")
+                                for port in v
                                 if port.isdigit()
                             ]
                         )

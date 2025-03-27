@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 #
-# _version.py
+# config_normalization.py
 #
-# Author: jeFF0Falltrades
+# Authors: doomedraven/jeFF0Falltrades
+#
+# Provides a utility class for parsing field names and values of various types
+# from raw RAT config data
+#
+# MIT License
 #
 # Copyright (c) 2024 Jeff Archer
 #
@@ -23,4 +28,31 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-__version__ = "4.0.2"
+from typing import Any
+
+normalized_keys = {
+    "Hosts": ("HOSTS", "Hosts", "ServerIp", "hardcodedhosts", "PasteUrl"),
+    "Ports": ("Port", "Ports", "ServerPort"),
+    "Mutex": ("MTX", "MUTEX", "Mutex", "mutex_string"),
+    "Version": ("VERSION", "Version"),
+    "Key": ("Key", "key", "EncryptionKey", "ENCRYPTIONKEY"),
+    "Group": ("Group", "Groub", "GroupTag", "TAG"),
+}
+
+
+# Normalizes config keys/values for easier mapping
+def check_key_n_value(key: str, value: Any) -> tuple[str, Any]:
+    key = key.replace("_", "")
+    for k, v in normalized_keys.items():
+        if key in v:
+            key = k
+            break
+
+    if key in ("Hosts", "Ports") and isinstance(value, str):
+        if value not in ("null", "false"):
+            splitter = "," if "," in value else ";"
+            value = list(filter(None, value.split(splitter)))
+        else:
+            value = []
+
+    return key, value
