@@ -212,3 +212,48 @@ class DotNetPEPayload:
     # Given an RVA, derives the corresponding User String
     def user_string_from_rva(self, rva: int) -> str:
         return self.dotnetpe.net.user_strings.get(rva ^ MDT_STRING).value
+
+    def custom_attribute_from_type(self, typespacename: str, typename: str) -> dict:
+        """
+        Ex:
+            typespacename: Server.Properties
+            typenaem: Settings
+
+        dnspy view
+            // Server.Properties.Settings
+            // Token: 0x17000077 RID: 119
+            // (get) Token: 0x06000913 RID: 2323 RVA: 0x00009FED File Offset: 0x000081ED
+            // (set) Token: 0x06000914 RID: 2324 RVA: 0x0000A004 File Offset: 0x00008204
+            [DebuggerNonUserCode]
+            [DefaultSettingValue("3128")]
+            [UserScopedSetting]
+            public decimal ReverseProxyPort
+
+        returns: dict.
+            Ex: {"ReverseProxyPort": "3128"}
+        """
+        config = {}
+        try:
+            for td in self.dotnetpe.net.mdtables.TypeDef.rows:
+                if td.TypeNamespace.value != typespacename and td.TypeName.value != typename:
+                    continue
+                for pd_row_index, pd in enumerate(self.dotnetpe.net.mdtables.Property.rows):
+                    if pd.Name.value.startswith("Boolean_", "BorderStyle_", "Color_", "Byte", "Int32_", "SizeF_", "String_"):
+                        continue
+                    for ca in self.dotnetpe.net.mdtables.CustomAttribute.rows:
+                        if ca.Parent.row_index == pd_row_index + 1:  # CustomAttribute Parent index is 1-based
+                            # Extract the value from the CustomAttribute blob
+                            blob_data = ca.Value.value
+                            if blob_data and blob_data != b"\x01\x00\x00\x00":
+                                # Basic handling of the blob data. You might need to adjust this depending on the actual format.
+                                # In many cases, the value is stored as a UTF-8 string after a preamble.
+                                try:
+                                    # Skip preamble bytes (usually 2 bytes). 3rd byte is size of data
+                                    value_bytes = blob_data[3:]
+                                    value = value_bytes.decode("utf-8").rstrip("\x00")
+                                    config.setdefault(pd.Name.value, value)
+                                except UnicodeDecodeError:
+                                    logger.debug("Warning: Could not decode blob data for %s", pd.Name.value)
+        except Exception as e:
+            logger.debug("An error occurred in custom_attribute_from_type: %s", str(e))
+        return config
