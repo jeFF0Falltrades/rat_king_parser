@@ -2,7 +2,7 @@
 #
 # dotnetpe_payload.py
 #
-# Author: jeFF0Falltrades
+# Authors: jeFF0Falltrades, doomedraven
 #
 # Provides a wrapper class for accessing metadata from a DotNetPE object and
 # performing data conversions
@@ -235,13 +235,28 @@ class DotNetPEPayload:
         config = {}
         try:
             for td in self.dotnetpe.net.mdtables.TypeDef.rows:
-                if td.TypeNamespace.value != typespacename and td.TypeName.value != typename:
+                if (
+                    td.TypeNamespace.value != typespacename
+                    and td.TypeName.value != typename
+                ):
                     continue
-                for pd_row_index, pd in enumerate(self.dotnetpe.net.mdtables.Property.rows):
-                    if pd.Name.value.startswith("Boolean_", "BorderStyle_", "Color_", "Byte", "Int32_", "SizeF_", "String_"):
+                for pd_row_index, pd in enumerate(
+                    self.dotnetpe.net.mdtables.Property.rows
+                ):
+                    if pd.Name.value.startswith(
+                        "Boolean_",
+                        "BorderStyle_",
+                        "Color_",
+                        "Byte",
+                        "Int32_",
+                        "SizeF_",
+                        "String_",
+                    ):
                         continue
                     for ca in self.dotnetpe.net.mdtables.CustomAttribute.rows:
-                        if ca.Parent.row_index == pd_row_index + 1:  # CustomAttribute Parent index is 1-based
+                        if (
+                            ca.Parent.row_index == pd_row_index + 1
+                        ):  # CustomAttribute Parent index is 1-based
                             # Extract the value from the CustomAttribute blob
                             blob_data = ca.Value.value
                             if blob_data and blob_data != b"\x01\x00\x00\x00":
@@ -253,7 +268,10 @@ class DotNetPEPayload:
                                     value = value_bytes.decode("utf-8").rstrip("\x00")
                                     config.setdefault(pd.Name.value, value)
                                 except UnicodeDecodeError:
-                                    logger.debug("Warning: Could not decode blob data for %s", pd.Name.value)
+                                    logger.debug(
+                                        "Warning: Could not decode blob data for %s",
+                                        pd.Name.value,
+                                    )
         except Exception as e:
             logger.debug("An error occurred in custom_attribute_from_type: %s", str(e))
         return config
