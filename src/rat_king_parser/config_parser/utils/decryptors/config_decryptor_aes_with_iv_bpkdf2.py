@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 #
-# config_decryptor_aes_cbc.py
+# config_decryptor_aes_with_iv_bpkdf2
 #
-# Author: jeFF0Falltrades
+# Author: doomedraven
 #
 # MIT License
 #
-# Copyright (c) 2024 Jeff Archer
+# Copyright (c) 2025 Jeff Archer
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -59,7 +59,9 @@ class ConfigDecryptorAESWithIV_pbkdf2(ConfigDecryptor):
     # Given an initialization vector and ciphertext, creates a Cipher
     # object with the AES key and specified IV and decrypts the ciphertext
     def _decrypt(self, iv: bytes, ciphertext: bytes) -> bytes:
-        logger.debug(f"Decrypting {ciphertext} with key {self.key.hex()} and IV {iv.hex()}...")
+        logger.debug(
+            f"Decrypting {ciphertext} with key {self.key.hex()} and IV {iv.hex()}..."
+        )
 
         cipher = AES.new(self.key, mode=CBC, iv=iv)
         unpadded_text = ""
@@ -69,12 +71,16 @@ class ConfigDecryptorAESWithIV_pbkdf2(ConfigDecryptor):
             unpadded_text = unpad(unpadded_text, AES.block_size)
         except Exception as e:
             logger.debug(ciphertext)
-            raise ConfigParserException(f"Error decrypting ciphertext with IV {iv.hex()} and key {self.key.hex()} : {e}")
+            raise ConfigParserException(
+                f"Error decrypting ciphertext with IV {iv.hex()} and key {self.key.hex()} : {e}"
+            )
         logger.debug(f"Decryption result: {unpadded_text}")
         return unpadded_text
 
     # Decrypts encrypted config values with the provided cipher data
-    def decrypt_encrypted_strings(self, encrypted_strings: dict[str, str]) -> dict[str, str]:
+    def decrypt_encrypted_strings(
+        self, encrypted_strings: dict[str, str]
+    ) -> dict[str, str]:
         logger.debug("Decrypting encrypted strings...")
         decrypted_config_strings = {}
         for k, v in encrypted_strings.items():
@@ -107,7 +113,9 @@ class ConfigDecryptorAESWithIV_pbkdf2(ConfigDecryptor):
                 print("error", e)
 
             if result is None:
-                logger.debug(f"Decryption failed for item {v}: {last_exc}; Leaving as original value...")
+                logger.debug(
+                    f"Decryption failed for item {v}: {last_exc}; Leaving as original value..."
+                )
                 result = v
 
             logger.debug(f"Key: {k}, Value: {result}")
@@ -132,7 +140,9 @@ class ConfigDecryptorAESWithIV_pbkdf2(ConfigDecryptor):
                 self.iv = key[32:]
                 self.key = key[:32]
             except ConfigParserException as cfe:
-                logger.info(f"Initialization using salt candidate {hex(bytes_to_int(candidate.groups()[0]))} failed: {cfe}")
+                logger.info(
+                    f"Initialization using salt candidate {hex(bytes_to_int(candidate.groups()[0]))} failed: {cfe}"
+                )
                 continue
 
     # Extracts the AES salt from the payload, accounting for both hardcoded
@@ -143,4 +153,3 @@ class ConfigDecryptorAESWithIV_pbkdf2(ConfigDecryptor):
         salt = self._payload.byte_array_from_size_and_rva(salt_size, salt_strings_rva)
         logger.debug(f"Found salt value: {salt.hex()}")
         return salt
-
