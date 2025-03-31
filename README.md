@@ -562,9 +562,30 @@ $ rat-king-parser -n dangerzone/* | jq
 ]
 ```
 
+
+
+## Development Guide
+**More Verbose Guide To Be Published**
+
+### Development Dependencies
+
+RKP uses `pre-commit` to enforce formatting.
+
+To begin development and install `pre-commit`, use the following command:
+
+```bash
+pip install .[dev]
+```
+
+Then, ensure you install the pre-commit hook:
+
+```bash
+pre-commit install
+```
+
 ## Feedback, Issues, and Additions
 
-If you have suggestions for improvement, bugs, feedback, or additional RAT families that use a similar configuration format as AsyncRAT, QuasarRAT, VenomRAT, DcRAT, etc. that are not yet supported, please send me a message on [Mastodon](https://infosec.exchange/@jeFF0Falltrades), [YouTube](https://www.youtube.com/c/jeff0falltrades), or submit an Issue or PR in this repo.
+If you have suggestions for improvement, bugs, feedback, or additional RAT families that use a similar configuration format as AsyncRAT, QuasarRAT, VenomRAT, DcRAT, etc. that are not yet supported, please send me a message on [Bluesky](https://bsky.app/profile/jeff0falltrades.bsky.social), [YouTube](https://www.youtube.com/c/jeff0falltrades), or submit an Issue or PR in this repo.
 
 Also, if this tool or video tutorial was helpful to you, that's always nice to hear as well!
 

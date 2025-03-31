@@ -36,7 +36,7 @@ classifiers = [
 ]
 dynamic = [ "version" ]
 dependencies = [ "dnfile", "pycryptodomex", "yara-python" ]
-
+optional-dependencies.dev = [ "pre-commit" ]
 optional-dependencies.maco = [ "maco", "validators" ]
 urls."Bug Reports" = "https://github.com/jeFF0Falltrades/rat_king_parser/issues"
 urls."Homepage" = "https://github.com/jeFF0Falltrades/rat_king_parser"
@@ -56,3 +56,6 @@ namespaces = false
 
 [tool.ruff]
 lint.extend-select = [ "I" ]
+
+[tool.pre-commit]
+hook-config = "file:.pre-commit-config.yaml"
