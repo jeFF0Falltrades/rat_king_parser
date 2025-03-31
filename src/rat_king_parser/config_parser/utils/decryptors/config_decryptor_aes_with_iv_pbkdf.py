@@ -42,7 +42,7 @@ from .config_decryptor import ConfigDecryptor, IncompatibleDecryptorException
 logger = getLogger(__name__)
 
 
-class ConfigDecryptorAESWithIV_pbkdf2(ConfigDecryptor):
+class ConfigDecryptorAESWithIV_pbkdf(ConfigDecryptor):
     # Minimum length of valid ciphertext
     _MIN_CIPHERTEXT_LEN = 16
 
