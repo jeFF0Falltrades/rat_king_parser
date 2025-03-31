@@ -24,8 +24,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 from .config_decryptor import ConfigDecryptor, IncompatibleDecryptorException
-from .config_decryptor_aes_with_iv_pbkdf2 import ConfigDecryptorAESWithIV_pbkdf
 from .config_decryptor_aes_with_iv import ConfigDecryptorAESWithIV
+from .config_decryptor_aes_with_iv_pbkdf2 import ConfigDecryptorAESWithIV_pbkdf
 from .config_decryptor_decrypt_xor import ConfigDecryptorDecryptXOR
 from .config_decryptor_ecb import ConfigDecryptorECB
 from .config_decryptor_plaintext import ConfigDecryptorPlaintext
