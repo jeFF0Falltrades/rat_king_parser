@@ -35,11 +35,11 @@ __all__ = [
     ConfigDecryptor,
     IncompatibleDecryptorException,
     ConfigDecryptorAESWithIV,
+    ConfigDecryptorAESWithIV_pbkdf,
     ConfigDecryptorECB,
     ConfigDecryptorDecryptXOR,
     ConfigDecryptorRandomHardcoded,
     ConfigDecryptorPlaintext,
-    ConfigDecryptorAESWithIV_pbkdf,
 ]
 
 # ConfigDecryptorPlaintext should always be the last fallthrough case
