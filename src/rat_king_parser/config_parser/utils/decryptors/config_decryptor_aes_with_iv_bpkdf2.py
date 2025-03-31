@@ -27,7 +27,7 @@
 # SOFTWARE.
 import re
 from base64 import b64decode
-from logging import getLogger, DEBUG
+from logging import getLogger
 
 from Cryptodome.Cipher import AES
 from Cryptodome.Cipher.AES import MODE_CBC as CBC
