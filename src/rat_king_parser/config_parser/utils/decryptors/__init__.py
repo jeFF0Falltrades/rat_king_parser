@@ -45,9 +45,9 @@ __all__ = [
 # ConfigDecryptorPlaintext should always be the last fallthrough case
 SUPPORTED_DECRYPTORS = [
     ConfigDecryptorAESWithIV,
+    ConfigDecryptorAESWithIV_pbkdf,
     ConfigDecryptorECB,
     ConfigDecryptorDecryptXOR,
     ConfigDecryptorRandomHardcoded,
     ConfigDecryptorPlaintext,
-    ConfigDecryptorAESWithIV_pbkdf,
 ]
