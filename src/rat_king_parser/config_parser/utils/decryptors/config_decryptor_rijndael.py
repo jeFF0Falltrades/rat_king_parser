@@ -51,7 +51,7 @@ from .config_decryptor import ConfigDecryptor, IncompatibleDecryptorException
 logger = logging.getLogger(__name__)
 
 
-# Is old AES
+# Is old AES - specifically Rijndael in CBC mode with MD5 hashing for key derivation
 class ConfigDecryptorRijndael(ConfigDecryptor):
     # MD5 hash pattern used to detect AES key
     _PATTERN_MD5_HASH = compile(rb"\x7e(.{3}\x04)\x6f.{4}\x11\x06\x0c", DOTALL)
