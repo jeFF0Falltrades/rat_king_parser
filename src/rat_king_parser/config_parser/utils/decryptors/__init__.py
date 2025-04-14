@@ -28,6 +28,7 @@ from .config_decryptor_aes_with_iv import ConfigDecryptorAESWithIV
 from .config_decryptor_aes_with_iv_pbkdf import ConfigDecryptorAESWithIV_pbkdf
 from .config_decryptor_decrypt_xor import ConfigDecryptorDecryptXOR
 from .config_decryptor_ecb import ConfigDecryptorECB
+from .config_decryptor_rijndael import ConfigDecryptorRijndael
 from .config_decryptor_plaintext import ConfigDecryptorPlaintext
 from .config_decryptor_random_hardcoded import ConfigDecryptorRandomHardcoded
 
@@ -36,6 +37,7 @@ __all__ = [
     IncompatibleDecryptorException,
     ConfigDecryptorAESWithIV,
     ConfigDecryptorAESWithIV_pbkdf,
+    ConfigDecryptorRijndael,
     ConfigDecryptorECB,
     ConfigDecryptorDecryptXOR,
     ConfigDecryptorRandomHardcoded,
@@ -46,6 +48,7 @@ __all__ = [
 SUPPORTED_DECRYPTORS = [
     ConfigDecryptorAESWithIV,
     ConfigDecryptorAESWithIV_pbkdf,
+    ConfigDecryptorRijndael,
     ConfigDecryptorECB,
     ConfigDecryptorDecryptXOR,
     ConfigDecryptorRandomHardcoded,
