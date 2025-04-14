@@ -77,7 +77,7 @@ class ConfigDecryptorRijndael(ConfigDecryptor):
         block_size = AES.block_size
         try:
             padded_text = cipher.decrypt(ciphertext)
-            padded_text = padded_text[16:]
+            padded_text = padded_text[16:] # Remove IV
         except ValueError:
             padded_text = cipher.decrypt(pad(ciphertext, block_size))
         try:
