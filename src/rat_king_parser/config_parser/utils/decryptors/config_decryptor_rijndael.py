@@ -104,7 +104,7 @@ class ConfigDecryptorRijndael(ConfigDecryptor):
                     key_rva = bytes_to_int(key_hit.groups()[0])
                     raw_key_field = self._payload.field_name_from_rva(key_rva)
                     key = encrypted_strings[raw_key_field]
-                    self.key = self.derive_key(key)
+                    self.key = self._derive_key(key)
             except Exception as e:
                 raise ConfigParserException(f"Failed to derive AES/3DES key: {e}")
 
