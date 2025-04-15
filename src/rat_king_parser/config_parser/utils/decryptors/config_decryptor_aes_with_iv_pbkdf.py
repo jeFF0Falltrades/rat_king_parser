@@ -52,7 +52,6 @@ class ConfigDecryptorAESWithIV_pbkdf(ConfigDecryptor):
     def __init__(self, payload: DotNetPEPayload) -> None:
         super().__init__(payload)
         try:
-            self.iv = False
             self._get_aes_metadata()
             if not self.iv:
                 raise IncompatibleDecryptorException("IV not found")
