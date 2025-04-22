@@ -75,7 +75,7 @@ class ConfigDecryptorRijndael(ConfigDecryptor):
             logger.debug("Incompatible Decryptor")
             raise IncompatibleDecryptorException(e)
 
-    # Given ciphertext, creates a Cipher object with the AES/3DES key and decrypts
+    # Given ciphertext, creates a Cipher object with the AES key and decrypts
     # the ciphertext
     def _decrypt(self, ciphertext: bytes) -> bytes:
         unpadded_text = ""
@@ -130,7 +130,7 @@ class ConfigDecryptorRijndael(ConfigDecryptor):
             b64_exception = False
             try:
                 decoded_val = b64decode(v)
-            except Exception as e:
+            except Exception:
                 b64_exception = True
             # If it was not base64-encoded, leave the value as it is
             if b64_exception:
