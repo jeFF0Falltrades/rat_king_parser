@@ -33,15 +33,9 @@ from base64 import b64decode
 from hashlib import md5
 import logging
 from re import DOTALL, compile, search
-from contextlib import suppress
 
-HAVE_CRYPTODOMEX = False
-with suppress(ImportError):
-    from Cryptodome.Cipher import AES
-    from Cryptodome.Util.Padding import pad, unpad
-
-    HAVE_CRYPTODOMEX = True
-
+from Cryptodome.Cipher import AES
+from Cryptodome.Util.Padding import pad, unpad
 
 from ...config_parser_exception import ConfigParserException
 from ..data_utils import bytes_to_int, decode_bytes
@@ -53,12 +47,24 @@ logger = logging.getLogger(__name__)
 
 # Is old AES - specifically Rijndael in CBC mode with MD5 hashing for key derivation
 class ConfigDecryptorRijndael(ConfigDecryptor):
+    _ALGO_MAP = {
+        b"\x17": AES.MODE_CBC,
+        b"\x1a": AES.MODE_CFB,
+        b"\x18": AES.MODE_ECB,
+    }
     # MD5 hash pattern used to detect AES key
     _PATTERN_MD5_HASH = compile(rb"\x7e(.{3}\x04)\x6f.{4}\x11\x06\x0c", DOTALL)
+    _PATTERN_MD5_HASH2 = compile(rb"\x7e(.{3}\x04)\x28.{3}\x06\x6f.{4}\x13\x04", DOTALL)
     _KEY_AS_ARG = compile(rb"\x7e(.{3}\x04)\x28.{3}\x06\x7e.{3}\x04\x28.{3}\x06\x80.{3}\x04", DOTALL)
+
     # key size 16 and 1 = CBC, 2 = ECB
     # https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.ciphermode?view=net-9.0
     # _PATTERN_AES_MODE = compile(rb"[\x06-\x09]\x6f.{4}\x21(.)\x00{8}\x59\x21(.)\x00{8}\x58\xd4\x8d.{4}\x13\x05")
+    # check AES mode
+    _AES_MODE = compile(rb"\x06\x09\x6f.{4}\x06(.)\x6f.{4}\x06\x6f.{4}\x13", DOTALL)
+    _SIMPLE_MD5 = compile(rb"\x11\x04\x16\x09\x16\x1f\x10\x28.{4}\x11\x04\x16\x09\x1f\x0f\x1f\x10\x28", DOTALL)
+    _PATTERNS_MD5 = (_PATTERN_MD5_HASH, _PATTERN_MD5_HASH2)
+    _KEY_PATTERNS = (_KEY_AS_ARG,)
 
     def __init__(self, payload: DotNetPEPayload) -> None:
         super().__init__(payload)
@@ -69,7 +75,7 @@ class ConfigDecryptorRijndael(ConfigDecryptor):
             logger.debug("Incompatible Decryptor")
             raise IncompatibleDecryptorException(e)
 
-    # Given ciphertext, creates a Cipher object with the AES key and decrypts
+    # Given ciphertext, creates a Cipher object with the AES/3DES key and decrypts
     # the ciphertext
     def _decrypt(self, ciphertext: bytes) -> bytes:
         unpadded_text = ""
@@ -77,7 +83,9 @@ class ConfigDecryptorRijndael(ConfigDecryptor):
         block_size = AES.block_size
         try:
             padded_text = cipher.decrypt(ciphertext)
-            padded_text = padded_text[16:] # Remove IV
+            if self.mode == AES.MODE_CBC:
+                # Remove the first 16 bytes of the decrypted text as they are the IV
+                padded_text = padded_text[16:]
         except ValueError:
             padded_text = cipher.decrypt(pad(ciphertext, block_size))
         try:
@@ -100,13 +108,15 @@ class ConfigDecryptorRijndael(ConfigDecryptor):
                     key = encrypted_strings[raw_key_field]
                     self.key = self._derive_key(key)
                 else:
-                    key_hit = search(self._KEY_AS_ARG, self._payload.data)
-                    key_rva = bytes_to_int(key_hit.groups()[0])
-                    raw_key_field = self._payload.field_name_from_rva(key_rva)
-                    key = encrypted_strings[raw_key_field]
-                    self.key = self._derive_key(key)
+                    for key_pattern in self._KEY_PATTERNS:
+                        key_hit = search(key_pattern, self._payload.data)
+                        key_rva = bytes_to_int(key_hit.groups()[0])
+                        raw_key_field = self._payload.field_name_from_rva(key_rva)
+                        key = encrypted_strings[raw_key_field]
+                        self.key = self._derive_key(key)
+                        break
             except Exception as e:
-                raise ConfigParserException(f"Failed to derive AES/3DES key: {e}")
+                raise ConfigParserException(f"Failed to derive AES key: {e}")
 
         decrypted_config_strings = {}
         for k, v in encrypted_strings.items():
@@ -120,7 +130,7 @@ class ConfigDecryptorRijndael(ConfigDecryptor):
             b64_exception = False
             try:
                 decoded_val = b64decode(v)
-            except Exception:
+            except Exception as e:
                 b64_exception = True
             # If it was not base64-encoded, leave the value as it is
             if b64_exception:
@@ -152,17 +162,30 @@ class ConfigDecryptorRijndael(ConfigDecryptor):
         md5_hash.update(key_unhashed.encode("utf-8"))
         key = md5_hash.digest()
 
-        logger.debug(f"Key derived: {key}")
+        if search(self._SIMPLE_MD5, self._payload.data):
+            # check if simple md5
+            logger.debug("Simple MD5 detected")
+            key = key[:15] + key[:16] + b"\x00"
+        logger.debug("Key derived: %s, from key: %s", key.hex(), key_unhashed)
         return key
 
     # Extracts the AES/3DES key RVA from the payload
     def _get_key_rva(self) -> int:
-        logger.debug("Extracting AES/3Des key value...")
-        key_hit = search(self._PATTERN_MD5_HASH, self._payload.data)
+        logger.debug("Extracting AES key value...")
+        key_hit = None
+        for pattern in self._PATTERNS_MD5:
+            key_hit = search(pattern, self._payload.data)
+            if key_hit:
+                break
         if not key_hit:
             raise ConfigParserException("Could not find AES key pattern")
 
+        # check if AES mode is different from CBC:
+        _AES_MODE = search(self._AES_MODE, self._payload.data)
+        if _AES_MODE:
+            self.mode = self._ALGO_MAP[_AES_MODE.groups()[0]]
+            logger.debug(f"AES mode: {self.mode}")
+
         key_rva = bytes_to_int(key_hit.groups()[0])
         logger.debug(f"AES key RVA: {hex(key_rva)}")
-
         return key_rva
