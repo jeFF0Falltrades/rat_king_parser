@@ -99,7 +99,7 @@ pip install "rat_king_parser[maco] @ git+https://github.com/jeFF0Falltrades/rat_
 
 ## Example Input/Output
 
-## Not Preserving Obfuscated Keys
+### Not Preserving Obfuscated Keys
 ```bash
 $ rat-king-parser -n dangerzone/* | jq
 ```
@@ -563,7 +563,7 @@ $ rat-king-parser -n dangerzone/* | jq
   }
 ]
 ```
-## Preserving Obfuscated Keys
+### Preserving Obfuscated Keys
 ```bash
 $ rat-king-parser -np dangerzone/* | jq
 ```
