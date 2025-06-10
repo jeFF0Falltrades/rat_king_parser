@@ -43,6 +43,7 @@ from .utils.decryptors import (
     ConfigDecryptor,
     IncompatibleDecryptorException,
 )
+from .utils.decryptors.config_decryptor_plaintext import KNOWN_CONFIG_FIELD_NAMES
 from .utils.dotnetpe_payload import DotNetPEPayload
 
 logger = getLogger(__name__)
@@ -64,6 +65,7 @@ class RATConfigParser:
         yara_rule: Rules = None,
         data: bytes = None,
         remap_config: bool = False,
+        preserve_obfuscated_keys: bool = False,
     ) -> None:
         self.report = {
             "file_path": file_path,
@@ -74,6 +76,7 @@ class RATConfigParser:
             "config": {},
         }
         self.remap_config = remap_config
+        self.preserve_obfuscated_keys = preserve_obfuscated_keys
         try:
             if data is None and not isfile(file_path):
                 raise ConfigParserException("File not found")
@@ -205,6 +208,17 @@ class RATConfigParser:
             except Exception as e:
                 raise ConfigParserException(f"Could not identify config: {e}")
         logger.debug(f"Config found at RVA {hex(config_start)}...")
+        if not self.preserve_obfuscated_keys and self._is_likely_obfuscated_config(
+            decrypted_config
+        ):
+            logger.debug(
+                "Preserve keys set to False and possible obfuscation detected; Translating keys..."
+            )
+            decrypted_config = {
+                f"obfuscated_key_{idx}": v
+                for idx, (_, v) in enumerate(decrypted_config.items(), 1)
+            }
+
         return decrypted_config
 
     # Attempts to retrieve the config via brute-force, looking through every
@@ -278,3 +292,11 @@ class RATConfigParser:
                 if min_config_len < self._MIN_CONFIG_LEN_FLOOR:
                     raise e
                 min_config_len -= 1
+
+    def _is_likely_obfuscated_config(self, config: dict[str, Any]) -> bool:
+        for key in config.keys():
+            if not key.isascii():
+                return True
+            if key in KNOWN_CONFIG_FIELD_NAMES:
+                return False
+        return True
