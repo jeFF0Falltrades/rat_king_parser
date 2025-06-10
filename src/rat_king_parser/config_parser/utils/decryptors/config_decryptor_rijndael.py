@@ -29,9 +29,9 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+import logging
 from base64 import b64decode
 from hashlib import md5
-import logging
 from re import DOTALL, compile, search
 
 from Cryptodome.Cipher import AES
