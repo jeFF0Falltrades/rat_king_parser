@@ -52,7 +52,10 @@ class ConfigDecryptorAESWithIV_pbkdf(ConfigDecryptor):
     def __init__(self, payload: DotNetPEPayload) -> None:
         super().__init__(payload)
         try:
+            self.iv = False
             self._get_aes_metadata()
+            if not self.iv:
+                raise IncompatibleDecryptorException("IV not found")
         except Exception as e:
             raise IncompatibleDecryptorException(e)
 
@@ -134,7 +137,7 @@ class ConfigDecryptorAESWithIV_pbkdf(ConfigDecryptor):
             password, size, salt_rva = candidate.groups()
 
             try:
-                self.salt = self._get_aes_salt(salt_rva, int.from_bytes(size))
+                self.salt = self._get_aes_salt(salt_rva, int.from_bytes(size, byteorder="little"))
                 password = self._payload.user_string_from_rva(bytes_to_int(password))
                 key = PBKDF2(password, self.salt, dkLen=48)
                 self.iv = key[32:]
