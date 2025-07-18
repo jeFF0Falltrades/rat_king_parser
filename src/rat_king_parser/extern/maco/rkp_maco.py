@@ -109,9 +109,9 @@ class RKPMACO(extractor.Extractor):
                             # Assume a list of ports was extracted
                             rkp_model.tcp.extend(
                                 [
-                                    rkp_model.Connection(server_port=port)
+                                    rkp_model.Connection(server_port=int(port))
                                     for port in v
-                                    if port.isdigit()
+                                    if str(port).isdigit()
                                 ]
                             )
                     case ConfigValueTypes.VERSION:
