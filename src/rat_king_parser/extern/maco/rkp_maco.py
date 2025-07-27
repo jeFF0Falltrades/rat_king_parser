@@ -102,13 +102,18 @@ class RKPMACO(extractor.Extractor):
                     # Instead, these will show individually as "server_port"
                     # entries in the MACO config
                     case ConfigValueTypes.PORT:
-                        rkp_model.tcp.extend(
-                            [
-                                rkp_model.Connection(server_port=port)
-                                for port in v
-                                if port.isdigit()
-                            ]
-                        )
+                        if isinstance(v, int):
+                            # Single port was extracted rather than a list
+                            rkp_model.tcp.append(rkp_model.Connection(server_port=v))
+                        else:
+                            # Assume a list of ports was extracted
+                            rkp_model.tcp.extend(
+                                [
+                                    rkp_model.Connection(server_port=int(port))
+                                    for port in v
+                                    if str(port).isdigit()
+                                ]
+                            )
                     case ConfigValueTypes.VERSION:
                         rkp_model.version = v
                 continue
