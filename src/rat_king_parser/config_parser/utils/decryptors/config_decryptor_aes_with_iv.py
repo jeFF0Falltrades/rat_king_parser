@@ -173,7 +173,13 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
         return decrypted_config_strings
 
     # Extracts AES key candidates from the payload
+<<<<<<< Updated upstream
     def _get_aes_key_candidates(self, encrypted_strings: dict[str, str]) -> list[bytes]:
+=======
+    def _get_aes_key_candidates(
+        self, encrypted_strings: dict[str, str]
+    ) -> list[bytes]:
+>>>>>>> Stashed changes
         logger.debug("Extracting AES key candidates...")
         keys = []
 
