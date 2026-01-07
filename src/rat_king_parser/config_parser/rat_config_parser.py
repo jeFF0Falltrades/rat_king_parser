@@ -178,10 +178,32 @@ class RATConfigParser:
             for k in sorted(config_fields_map.keys()):
                 key_name = config_fields_map[k]
                 value = decoded_config[key_name]
+
+                # Run your normalization (e.g. converting HostsFE -> Hosts)
                 key_normalized, value = check_key_n_value(key_name, value)
+
                 if key_normalized != key_name:
                     normalized_fields.append(key_name)
-                sorted_decoded_config[key_normalized] = value
+
+                # --- LOGIC TO APPEND INSTEAD OF OVERWRITE ---
+                if key_normalized in sorted_decoded_config:
+                    existing_val = sorted_decoded_config[key_normalized]
+
+                    # Case 1: Values are Strings (e.g. "1.2.3.4:80")
+                    if isinstance(existing_val, str) and value:
+                        # Append with a comma separator
+                        sorted_decoded_config[key_normalized] = f"{existing_val},{value}"
+
+                    # Case 2: Values are Lists (e.g. ["1.2.3.4:80"])
+                    elif isinstance(existing_val, list):
+                        # If the new value is also a list, extend; otherwise append
+                        if isinstance(value, list):
+                            sorted_decoded_config[key_normalized] = existing_val + value
+                        else:
+                            sorted_decoded_config[key_normalized].append(value)
+                else:
+                    # Key does not exist yet, create it
+                    sorted_decoded_config[key_normalized] = value
             # Ensure config items added by decryptors dynamically are preserved
             sorted_decoded_config.update(
                 {
