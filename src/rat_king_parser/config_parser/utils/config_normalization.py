@@ -31,7 +31,7 @@
 from typing import Any
 
 normalized_keys = {
-    "Hosts": ("HOSTS", "Hosts", "ServerIp", "hardcodedhosts", "PasteUrl"),
+    "Hosts": ("HOSTS", "Hosts", "HostsFE", "ServerIp", "hardcodedhosts", "PasteUrl"),
     "Ports": ("Port", "Ports", "ServerPort"),
     "Mutex": ("MTX", "MUTEX", "Mutex", "mutex_string"),
     "Version": ("VERSION", "Version"),
