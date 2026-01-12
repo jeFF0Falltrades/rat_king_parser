@@ -78,11 +78,7 @@ def test_parser_against_known_samples(expected_file):
 
     sha = expected["sha256"]
 
-    sample_path = None
-    for p in SAMPLES_DIR.iterdir():
-        if p.is_file() and p.name.startswith(sha):
-            sample_path = p
-            break
+    sample_path = next((p for p in SAMPLES_DIR.iterdir() if p.is_file() and p.name.startswith(sha)), None)
 
     assert sample_path is not None, f"No sample file found for SHA {sha}"
 
