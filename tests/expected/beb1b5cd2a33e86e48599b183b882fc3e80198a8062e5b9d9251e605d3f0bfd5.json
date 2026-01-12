@@ -1,0 +1,30 @@
+{
+  "config": {
+    "obfuscated_key_1": true,
+    "obfuscated_key_10": "1.4.1",
+    "obfuscated_key_11": "91.92.241.122:6969;",
+    "obfuscated_key_12": "",
+    "obfuscated_key_13": "Client.exe",
+    "obfuscated_key_14": "fcf2be0a-a426-40c6-b153-1a354814f80d",
+    "obfuscated_key_15": "Quasar Client Startup",
+    "obfuscated_key_16": "26A6C07FE7354BCD244B108D2E3538DCF04477F5",
+    "obfuscated_key_17": "Fab",
+    "obfuscated_key_18": "Logs",
+    "obfuscated_key_19": "U/jVlmjpH/9zMrLFla8LcLavxUQe9wt9L6qGAh9zYqPdqDW0e0fRlnxEST/s3HTVlAyuqIyn5yKrWKaXCMUHKcjpAWVQ9jPLAteKNgIRz5Soa8qxWgD215NTswSL/tYwdPW2svV9y6ELPKScSacDyZlBp47bv299XhxjeUkAXIli59EHnHxAIlOS/Ag51onRTlEkGYIVQO1IJjGoGQe8pND5JwWOVi072s67A16SNYJmPrCNqDjCMVjYDRwLqusbuDPF2K0wIVLn4RzLr+F1O5e5Rh8GFIj/7qa8gOy2kjAbczo3AAKZG3sghrut27P2ldxGcWpsms5w97k7WJ91goBms0n/hV29sRDiYG51xey3KqcTp2UspvLUzNJek21CZk+EgCQ3Q7+aZxdLAIEfwAo0cq7lJkq3iEZuZ+86sts1D3YToM9+mRtIDAeb/op2oxvWbJOqeA9YME2A7PWDVI6bH9kcru5UolqfxPRIH7Aa8BVzAbctghbaVZCiwkI0lxc9hijCLZugOnKXtFU3A+hPVyc/aDqZcWPDu7u9jWbrWIk6JqLGbnJYiU6a4p7IwdGnVwkA49aD4ZnKqWo8tSKLCd+dvP4nx+pqYWiUpf+rdy/xH1MBbPj/lPlphmrFFHijlBufVoSLa88/rBv+Fb9ox2Ei2t5RJYTLDEoP0oY=",
+    "obfuscated_key_2": true,
+    "obfuscated_key_20": "MIIE9DCCAtygAwIBAgIQAJMC1KOnf3PAJ47sO2MclTANBgkqhkiG9w0BAQ0FADAbMRkwFwYDVQQDDBBRdWFzYXIgU2VydmVyIENBMCAXDTI0MDgwMjE5MzAwMVoYDzk5OTkxMjMxMjM1OTU5WjAbMRkwFwYDVQQDDBBRdWFzYXIgU2VydmVyIENBMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAk9yV4zXwIw2x7ZZyu2WnaWGwrq2laEP44y9HMM/PYRQCmkMr/L4bqPIgee+trkTOK2T/yd37YISYQSsfQXONYG5JZy1DsZgWAy177xEUoLNAv/TmWrovdVhFSIN0FtQo4ED1AMSOeRWPYw3fdFplPo25TqiZnJuC76fu04Sfl5/B5RqZUy3FKkVlZRL/99zAKjQvFIFvX/riz7pwYPoKSNzRB+SPebLJgYlG7qaxb11C/oiJu1AuEcrmjjr8Ph/nYAqY4EzsjWw6mBUEKTAdCptz78Xpj2qZ/DO//6rDIkw2HWyvvJ4qC2jhv4d2LL/LVSof2SDkMY2NRweMtwnmI8mYIf6mF6pOuH7l6IONc+W2LahqbDImjijmYOJnED/4mV3QRvXHZlwwn/qwf4Fc98VdNayqw1SdKyWqSEIFaa8ZtbSvGj1RQWwzJXQ0sr7EVcv26GUorfX4y5wXhVu5DQfAIZkhZoGSOUPVh0E/NnSqFA10M7TcTz0+fwxLjZ93vi0D0dBcyWvMwTUjy1FHZMu7ZXPsrGbDMmhwmNSsqCqV3SGLZEwaSI2Wtzi1SgElz9+GSh3twxi6O+kaOtP8vu6jbzYi8QSLbn+APkX4XXetIms76fRT6c0yjgnr8NNhdATN3NIAy2AIBfRB9+WkmEEzWf35oLIb0WaNIXtRS5MCAwEAAaMyMDAwHQYDVR0OBBYEFJnfWehSzSmr6K0SenBX6AyNEZUqMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQENBQADggIBAEsJnW/h1UmS2DsvTd6vhMwSVZjtK5PKYx8HRL1KPrhDa4WVdYvXu9DaO0BHs5dad+EMTuhWirWXv1oG4TUBVwwZ9ka95ooIZhrZdjLe1sXHeRTubU9yO5bl/6fhHUvPcDsktCgBxboI40t6YcJk+wtIdobhhO0dIHK7OAkJMXQMv7bWX6xy2HwPk0tzkHSskWe160kUiNdxZomd6VSL5FnJ9aB6erznl1WABJNRNwIksM1xlrgyCFAMRvJwpJi823H/ApWwAosQo9qstOo2e+OMrCAzexGJL93JANAXAf7xa5TXzcTPd+n9QhYSDWW7EqDim8vguQzHkHkDNRMP0poqTHFYovcupr2zBjkhPC6sP/f0Rq/aQ6Dyqqoj0cW/nH2wl4eFXvQnSHTbbVIo2qzb+Ud1qFhXxkGzuP//V/wBgEAhLcFraqgQ/b4kX0hkhV0yYaTWpqVemg4Aki7RYz9nGIRMcdr+APFeXo49FHjerk0lqszbKd6IJn3CR9U+ZLpzp3M9NLdeTPpjGal8IgMjuO6MXmt/ybz1fAfM0shKsq4+3nUI0TMGBgYhrPdS5VoA29Xg84hAVj7wewNZKJ43d/poHQnrjWkuN/Ii66IaKVyKofoMiHyfHIy0ee456vDYvxbPv+k9euEhv4OiK8dTWwvDr2XlJZWfq+pukDEk",
+    "obfuscated_key_21": "",
+    "obfuscated_key_22": "",
+    "obfuscated_key_3": false,
+    "obfuscated_key_4": true,
+    "obfuscated_key_5": false,
+    "obfuscated_key_6": false,
+    "obfuscated_key_7": true,
+    "obfuscated_key_8": 3000,
+    "obfuscated_key_9": "APPLICATIONDATA"
+  },
+  "key": "b5580a84ddadcf548713dd64fedbbe067f931e6ce4699271de572acbd52f4074",
+  "salt": "bfeb1e56fbcd973bb219022430a57843003d5644d21e62b9d4f180e7e6c33941",
+  "sha256": "beb1b5cd2a33e86e48599b183b882fc3e80198a8062e5b9d9251e605d3f0bfd5",
+  "yara_possible_family": "quasarrat"
+}

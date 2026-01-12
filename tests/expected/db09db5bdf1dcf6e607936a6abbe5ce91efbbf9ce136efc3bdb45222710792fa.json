@@ -1,0 +1,25 @@
+{
+  "config": {
+    "An_ti": "false",
+    "Anti_Process": "false",
+    "BS_OD": "false",
+    "Certifi_cate": "MIICOTCCAaKgAwIBAgIVAPyfwFFMs6hxoSr1U5gHJmBruaj1MA0GCSqGSIb3DQEBDQUAMGoxGDAWBgNVBAMMD1Zlbm9tUkFUIFNlcnZlcjETMBEGA1UECwwKcXdxZGFuY2h1bjEfMB0GA1UECgwWVmVub21SQVQgQnkgcXdxZGFuY2h1bjELMAkGA1UEBwwCU0gxCzAJBgNVBAYTAkNOMB4XDTIyMDgxNDA5NDEwOVoXDTMzMDUyMzA5NDEwOVowEzERMA8GA1UEAwwIVmVub21SQVQwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAJMk9aXYluIabmb8kV7b5XTizjGIK0IH5qWN260bNCSIKNt2zQOLq6jGfh+VvAA/ddzW3TGyxBUMbya8CatcEPCCiU4SEc8xjyE/n8+O0uya4p8g4ooTRIrNFHrRVySKchyTv32rce963WWvmj+qDvwUHHkEY+Dsjf46C40vWLDxAgMBAAGjMjAwMB0GA1UdDgQWBBQsonRhlv8vx7fdxs/nJE8fsLDixjAPBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBDQUAA4GBAAVFFK4iQZ7aqDrUwV6nj3VoXFOcHVo+g9p9ikiXT8DjC2iQioCrN3cN4+w7YOkjPDL+fP3A7v+EI9z1lwEHgAqFPY7tF7sT9JEFtq/+XPM9bgDZnh4o1EWLq7Zdm66whSYsGIPR8wJdtjw6U396lrRHe6ODtIGB/JXyYYIdaVrz",
+    "De_lay": "1",
+    "Group": "Default",
+    "Hos_ts": "127.0.0.1",
+    "Hw_id": "null",
+    "In_stall": "false",
+    "Install_File": "",
+    "Install_Folder": "%AppData%",
+    "Key": "M1NoWkREazBvNTNGUkRlT0s4TjE1QlRRQmx4bW1zd2U=",
+    "MTX": "qmhvogiycvwh",
+    "Paste_bin": "null",
+    "Por_ts": "4449,7772",
+    "Server_signa_ture": "BW9mNNWdLZ+UgmfSTOot753DE24GfE+H6HYG5yl4IFszdMLpfQXijxVlt3bcz68PrHwYG2R70J+h9EVUXPjNw2GgCH5I8BvOw6Luh09VjE3YrfERSa2NKJ7baO9U9NDhM4HaSUCUvXGbR6J0itLe+2YthV7GXSCEbbmfZI9UYKU=",
+    "Ver_sion": "Venom RAT + HVNC + Stealer + Grabber  v6.0.3"
+  },
+  "key": "11ed70df5ce22de750c6e7496fa5c51985c321d2d9dd463979337af003644f41",
+  "salt": "56656e6f6d524154427956656e6f6d",
+  "sha256": "db09db5bdf1dcf6e607936a6abbe5ce91efbbf9ce136efc3bdb45222710792fa",
+  "yara_possible_family": "venomrat"
+}

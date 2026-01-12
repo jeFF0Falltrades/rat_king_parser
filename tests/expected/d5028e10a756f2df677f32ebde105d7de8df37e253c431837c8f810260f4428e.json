@@ -1,0 +1,16 @@
+{
+  "config": {
+    "DoStartup": 2222,
+    "EncryptionKey": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",
+    "Install_path": "appdata",
+    "ServerIp": "77.221.152.198",
+    "ServerPort": 4444,
+    "delay": 5000,
+    "mutex_string": "Xeno_rat_nd89dsedwqdswdqwdwqdqwdqwdwqdwqdqwdqwdwqdwqd12d",
+    "startup_name": "nothingset"
+  },
+  "key": "650f47cdd14eaef8c529f2a03fa7744c",
+  "salt": "None",
+  "sha256": "d5028e10a756f2df677f32ebde105d7de8df37e253c431837c8f810260f4428e",
+  "yara_possible_family": "xenorat"
+}

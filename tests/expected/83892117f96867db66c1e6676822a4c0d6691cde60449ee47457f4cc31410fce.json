@@ -1,0 +1,27 @@
+{
+  "config": {
+    "obfuscated_key_1": false,
+    "obfuscated_key_10": "qztadmin.duckdns.org:9782;",
+    "obfuscated_key_11": "1WvgEMPjdwfqIMeM9MclyQ==",
+    "obfuscated_key_12": "NcFtjbDOcsw7Evd3coMC0y4koy/SRZGydhNmno81ZOWOvdfg7sv0Cj5ad2ROUfX4QMscAIjYJdjrrs41+qcQwg==",
+    "obfuscated_key_13": "SubDir",
+    "obfuscated_key_14": "Client.exe",
+    "obfuscated_key_15": "QSR_MUTEX_YMblzlA3rm38L7nnxQ",
+    "obfuscated_key_16": "Quasar Client Startup",
+    "obfuscated_key_17": "mDf8ODHd9XwqMsIxpY8F",
+    "obfuscated_key_18": "Office04",
+    "obfuscated_key_19": "Logs",
+    "obfuscated_key_2": false,
+    "obfuscated_key_3": false,
+    "obfuscated_key_4": true,
+    "obfuscated_key_5": true,
+    "obfuscated_key_6": false,
+    "obfuscated_key_7": 3000,
+    "obfuscated_key_8": "APPLICATIONDATA",
+    "obfuscated_key_9": "1.3.0.0"
+  },
+  "key": "ff230bfb57fecad4bd59d4d97f6883b4",
+  "salt": "bfeb1e56fbcd973bb219022430a57843003d5644d21e62b9d4f180e7e6c33941",
+  "sha256": "83892117f96867db66c1e6676822a4c0d6691cde60449ee47457f4cc31410fce",
+  "yara_possible_family": "quasarrat"
+}
