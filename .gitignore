@@ -3,5 +3,3 @@
 __pycache__/
 build/
 *.egg-info/
-bin/
-tests/samples/
