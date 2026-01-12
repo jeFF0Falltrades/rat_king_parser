@@ -234,6 +234,13 @@ class DotNetPEPayload:
         """
         config = {}
         try:
+            ca_map = {}
+            for ca in self.dotnetpe.net.mdtables.CustomAttribute.rows:
+                idx = ca.Parent.row_index
+                if idx not in ca_map:
+                    ca_map[idx] = []
+                ca_map[idx].append(ca)
+
             for td in self.dotnetpe.net.mdtables.TypeDef.rows:
                 if (
                     td.TypeNamespace.value != typespacename
@@ -253,10 +260,10 @@ class DotNetPEPayload:
                         "String_",
                     ):
                         continue
-                    for ca in self.dotnetpe.net.mdtables.CustomAttribute.rows:
-                        if (
-                            ca.Parent.row_index == pd_row_index + 1
-                        ):  # CustomAttribute Parent index is 1-based
+                    # CustomAttribute Parent index is 1-based
+                    target_index = pd_row_index + 1
+                    if target_index in ca_map:
+                        for ca in ca_map[target_index]:
                             # Extract the value from the CustomAttribute blob
                             blob_data = ca.Value.value
                             if blob_data and blob_data != b"\x01\x00\x00\x00":

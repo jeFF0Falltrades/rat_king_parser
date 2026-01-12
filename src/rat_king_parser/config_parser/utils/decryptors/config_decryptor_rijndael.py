@@ -102,7 +102,6 @@ class ConfigDecryptorRijndael(ConfigDecryptor):
         logger.debug("Decrypting encrypted strings...")
         if not self.key:
             try:
-                #
                 raw_key_field = self._payload.field_name_from_rva(self._key_rva)
                 if raw_key_field in encrypted_strings:
                     key = encrypted_strings[raw_key_field]
@@ -110,11 +109,15 @@ class ConfigDecryptorRijndael(ConfigDecryptor):
                 else:
                     for key_pattern in self._KEY_PATTERNS:
                         key_hit = search(key_pattern, self._payload.data)
+                        if not key_hit:
+                            continue
                         key_rva = bytes_to_int(key_hit.groups()[0])
                         raw_key_field = self._payload.field_name_from_rva(key_rva)
-                        key = encrypted_strings[raw_key_field]
-                        self.key = self._derive_key(key)
-                        break
+                        if raw_key_field in encrypted_strings:
+                            key = encrypted_strings[raw_key_field]
+                            self.key = self._derive_key(key)
+                            break
+
             except Exception as e:
                 raise ConfigParserException(f"Failed to derive AES key: {e}")
 

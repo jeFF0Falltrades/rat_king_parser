@@ -79,9 +79,9 @@ class ConfigDecryptorRandomHardcoded(ConfigDecryptor):
         hardcoded_hosts = []
         for rva in hardcoded_host_rvas:
             try:
-                harcoded_host = self._payload.user_string_from_rva(bytes_to_int(rva))
-                if harcoded_host != ".":
-                    hardcoded_hosts.append(harcoded_host)
+                extracted_hosts = self._payload.user_string_from_rva(bytes_to_int(rva))
+                if extracted_hosts != ".":
+                    hardcoded_hosts.append(extracted_hosts)
             except Exception as e:
                 logger.error(f"Error translating hardcoded host at {hex(rva)}: {e}")
                 continue
