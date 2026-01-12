@@ -1,0 +1,24 @@
+{
+  "config": {
+    "Anti": "%Anti%",
+    "BDOS": "%BDOS%",
+    "Certificate": "%Certificate%",
+    "Delay": "%Delay%",
+    "Group": "%Group%",
+    "Hosts": "%Hosts%",
+    "Hwid": "null",
+    "Install": "%Install%",
+    "InstallFile": "%File%",
+    "InstallFolder": "%Folder%",
+    "Key": "%Key%",
+    "MTX": "%MTX%",
+    "Pastebin": "%Pastebin%",
+    "Ports": "%Ports%",
+    "Serversignature": "%Serversignature%",
+    "Version": "%Version%"
+  },
+  "key": "None",
+  "salt": "bfeb1e56fbcd973bb219022430a57843003d5644d21e62b9d4f180e7e6c33941",
+  "sha256": "0e19cefba973323c234322452dfd04e318f14809375090b4f6ab39282f6ba07e",
+  "yara_possible_family": "asyncrat"
+}

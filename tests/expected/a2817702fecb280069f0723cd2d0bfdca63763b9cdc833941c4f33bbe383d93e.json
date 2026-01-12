@@ -1,0 +1,30 @@
+{
+  "config": {
+    "ENABLELOGGER": true,
+    "ENCRYPTIONKEY": "O2CCRlKB5V3AWlrHVKWMrr1GvKqVxXWdcx0l0s6L8fB2mavMqr",
+    "HIDEFILE": true,
+    "INSTALL": false,
+    "INSTALLNAME": "INSTALL",
+    "MUTEX": "e4d6a6ec-320d-48ee-b6b2-fa24f03760d4",
+    "PASSWORD": "5EPmsqV4iTCGjx9aY3yYpBWD0IgEJpHNEP75pks",
+    "RECONNECTDELAY": 5000,
+    "SPECIALFOLDER": "APPLICATIONDATA",
+    "STARTUP": true,
+    "STARTUPKEY": "STARTUP",
+    "SUBFOLDER": "SUB",
+    "TAG": "RELEASE",
+    "VERSION": "1.0.00.r3",
+    "hardcoded_hosts": [
+      "kilofrngcida.xyz:443",
+      "sartelloil.lat:443",
+      "fostlivedol.xyz:443",
+      "comerciodepeixekino.org:443",
+      "cartlinkfoltrem.xyz:443",
+      "trucks-transport.xyz:443"
+    ]
+  },
+  "key": "None",
+  "salt": "None",
+  "sha256": "a2817702fecb280069f0723cd2d0bfdca63763b9cdc833941c4f33bbe383d93e",
+  "yara_possible_family": "quasarrat"
+}

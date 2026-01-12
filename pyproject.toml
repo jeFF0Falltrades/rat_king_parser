@@ -1,6 +1,6 @@
 [build-system]
 build-backend = "setuptools.build_meta"
-requires = [ "setuptools" ]
+requires = ["setuptools"]
 
 [project]
 name = "rat-king-parser"
@@ -34,10 +34,10 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
 ]
-dynamic = [ "version" ]
-dependencies = [ "dnfile", "pycryptodomex", "yara-python" ]
-optional-dependencies.dev = [ "pre-commit" ]
-optional-dependencies.maco = [ "maco", "validators" ]
+dynamic = ["version"]
+dependencies = ["dnfile", "pycryptodomex", "yara-python"]
+optional-dependencies.dev = ["pre-commit", "pytest"]
+optional-dependencies.maco = ["maco", "validators"]
 urls."Bug Reports" = "https://github.com/jeFF0Falltrades/rat_king_parser/issues"
 urls."Homepage" = "https://github.com/jeFF0Falltrades/rat_king_parser"
 urls."Say Thanks!" = "https://www.buymeacoffee.com/jeff0falltrades"
@@ -47,15 +47,15 @@ scripts.rat-king-parser = "rat_king_parser:main"
 version = { attr = "rat_king_parser._version.__version__" }
 
 [tool.setuptools.packages.find]
-where = [ "src" ]
-include = [ "rat_king_parser*" ]
+where = ["src"]
+include = ["rat_king_parser*"]
 namespaces = false
 
 [tool.setuptools.package-data]
-"rat_king_parser.yara_utils" = [ "*.yar", "*.yarc" ]
+"rat_king_parser.yara_utils" = ["*.yar", "*.yarc"]
 
 [tool.ruff]
-lint.extend-select = [ "I" ]
+lint.extend-select = ["I"]
 
 [tool.pre-commit]
 hook-config = "file:.pre-commit-config.yaml"

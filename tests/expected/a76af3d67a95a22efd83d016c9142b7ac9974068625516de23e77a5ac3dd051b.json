@@ -1,0 +1,30 @@
+{
+  "config": {
+    "obfuscated_key_1": true,
+    "obfuscated_key_10": "1.4.1",
+    "obfuscated_key_11": "10.0.0.61:4782;24.67.68.3:4782;",
+    "obfuscated_key_12": "SubDir",
+    "obfuscated_key_13": "GloomTool.exe",
+    "obfuscated_key_14": "9fdd3e80-d560-431b-b526-3ebbc1799110",
+    "obfuscated_key_15": "WindowsAV",
+    "obfuscated_key_16": "5F91B88C67A9ACF78B2396771B3B6F2B4615CA57",
+    "obfuscated_key_17": "Office04",
+    "obfuscated_key_18": "Logs",
+    "obfuscated_key_19": "KQrwmpZSwOF20ZdNZlVJ7YjgErzUf9cophPOCAULRI4gSid7qeSaRL4LhhUXzEq1JuUlkRR7WTjztBsmwCRqORdxEBFwd1fMTsYFf4COj4yN1sbvc5Yb1qvk6IELnzse14eXVS+y1AbwCOGBEa1P6H2C2X2xH6jZRBMPaFsohcV0z20ZzWpdJw+aQZ/SSbMvE1YFN5o37y3MzAW/nErdZyxLA7t9eTsca+RLT8uHgqU0iEd4Mz1iHUWA2gYY+uPzV1I3oU8LHrWhXnXRhutbShZ80KbE+tfr7XLAIwwol00moTd7GaL4vd/ZeOa3z3nmVO2GxIRMWCmiX52l5MutcuR/nAAR1k+W2ScaAoxXzpb6pwOwccooFty0lpRoO6RMT+g1ux+jwKn4RpH1baEAmA6cu8W2l1mr8dwZ3ra094dUKEdITKRKEviworYIRWDS9w2618tVfRhccHNsbIIp5qZMumne0OVE+FK6rjPZM/Q4OR7++1AQUNiavCOsY6/sbxdb+K43x2PrxzJAPoU33qF2fzXaSIEgbmlqkZFdFOhSVHay5F4lmuvHUGRXmhs37quo874DaCA5phI3aCP8VXIFkHyjOJelIR9wlfsdNY5yOoA2POnFt1Y24YzoPZt3Mc/Nqv74z/cE3LXrJHsgivyZV25nqpiCHL704AfoRpo=",
+    "obfuscated_key_2": true,
+    "obfuscated_key_20": "MIIE9DCCAtygAwIBAgIQAIhqXB+nLwd+VvEk3rjLsTANBgkqhkiG9w0BAQ0FADAbMRkwFwYDVQQDDBBRdWFzYXIgU2VydmVyIENBMCAXDTI0MDQwNTIyNDkxN1oYDzk5OTkxMjMxMjM1OTU5WjAbMRkwFwYDVQQDDBBRdWFzYXIgU2VydmVyIENBMIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEArk3R4LAyzBp+YXIUqxBNyT/R94en+jU7NTtJGsCG7I6Tp2ZV6mdTOynApeBLs6RvgIpzxPIbjA7HMoQqRxBDKREcRZJCnK3NdMl+8ZMKU4OLBWINwW4fvZRu2spC79MYiIsKOXRDsfCelPs1llHTbD4b4c+PzbpcGA5gI+luZ6+OKajkGbAKdppse5EdPh+KrE6r74nAJiK9PdvfF1H7XwOVpFChxcYZJmZTG8hfrSFQ/0mSi0CobU71vj8fVkhX0EOVSv/KoilBScsXRYbvNY/uEzS+9f0xsYK5AgJQcUYWLthqKSZbo3T1WecBHKynExf8LbFpC42ACyPbZXtAYt1lyBXyLW8TZS65yquhcVio/ZgAG05WGn+TeA6M+CxNkEZNvgd5PDuBkF6X13w3OXGFOL7i4KBJifSMRyJaqp9i6ksAY8epDRHP1WOXDxnQ8ak+4jyPC6WSZFnGV3DT7lZahvkIaNR8OPR8suOoUWk8Jl9Fxx+DBa6RK3Ht96YkPAf8rY84Hjjp4xp1OF6q88W1YaYo9NtPK+5fkf2pFqa+RC7v3RKgsis3/1xYeBZ8expiCdm5hKTRx0tAkG5bLzC6/Em8cHqCR6lmbPuHgA4ijByU6fLD1JdmwqAcjpy9OIdB8L+G7X8kAu5+WUe5BMiIE6EYvJi3Rpg2fz5Nt9UCAwEAAaMyMDAwHQYDVR0OBBYEFI40k9gCti/BlRy3dUVqsbe3OhMxMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQENBQADggIBAAXYckulFdYnmtdh24egkttF9h/0AD87o9kAnRwJVu3nu12R+FwJgaihvAQZiKQ4kgTkP//ag9E60xwyzEcj00/yZGzjMAAXONZoEyeCxEF5cMjbtmqLWsFkRaHEpWtcczJ2BChEnFDgoGF2I6TOlr7OGoJnzHmz43bY9dkpDJ+tqIZu5AwoMG4WMoNe+by66G2S1AjyVVimIJA7at12EMIUizO0Qov+iBFHSDiVwOZlUxhfu9TNKwIgQdSLHnTaBg03VFHpLZ63Qtmr12LwTEOUyVSnJXEsgZISQ0abMCaped6jwpR7+VlpU4SGfyBU8caFphJafdgVzhmztrTpYMUJE44d50+5ue9us2H2IH+26/+yBbQdffzp1LAFfYgjOE7k8EFjU3ayPaTN7ORtjCyNzhYRvjUCuopb0rWhJsQQRQJzkblrYJ/ocSfNGUQOoJpykyD1QiGboE11xIPheLYetZrRtkmNtFuVeKg9z7AB1ahxEcNGT/MW/wkxUe500cBLVTFeZtsMl7WYB6iUSxboQ8zZ8eWCDS2hYOxKfxfr54p4AW24Y267djKnAfpnMIsgJzjcDxvGGMBlwcrxb0vM0w+9K2R+M17r4bldxnStJj2Wtgal1TBVP1XexZgarfXw3HstKjhbFH6cb4g7ZW4wdCYE5XA6qZL00XpuSy4t",
+    "obfuscated_key_21": "",
+    "obfuscated_key_22": "",
+    "obfuscated_key_3": true,
+    "obfuscated_key_4": true,
+    "obfuscated_key_5": true,
+    "obfuscated_key_6": true,
+    "obfuscated_key_7": true,
+    "obfuscated_key_8": 3000,
+    "obfuscated_key_9": "APPLICATIONDATA"
+  },
+  "key": "b30cea630f7fac6c2e066ce7f29e1b4bab548ee95b20ff6aa7387ce14df5dc30",
+  "salt": "bfeb1e56fbcd973bb219022430a57843003d5644d21e62b9d4f180e7e6c33941",
+  "sha256": "a76af3d67a95a22efd83d016c9142b7ac9974068625516de23e77a5ac3dd051b",
+  "yara_possible_family": "quasarrat"
+}
