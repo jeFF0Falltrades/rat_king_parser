@@ -67,6 +67,7 @@ class ConfigDecryptorAESWithIV_pbkdf(ConfigDecryptor):
         )
 
         cipher = AES.new(self.key, mode=CBC, iv=iv)
+        unpadded_text = ""
 
         try:
             unpadded_text = cipher.decrypt(ciphertext)
@@ -112,7 +113,7 @@ class ConfigDecryptorAESWithIV_pbkdf(ConfigDecryptor):
                 result = decode_bytes(self._decrypt(self.iv, decoded_val))
             except ConfigParserException as e:
                 last_exc = e
-                logger.debug(f"Error decrypting {k}: {e}")
+                print("error", e)
 
             if result is None:
                 logger.debug(

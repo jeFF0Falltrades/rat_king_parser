@@ -29,7 +29,7 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-from logging import getLogger
+import logging
 from base64 import b64decode
 from hashlib import md5
 from re import DOTALL, compile, search
@@ -42,7 +42,7 @@ from ..data_utils import bytes_to_int, decode_bytes
 from ..dotnetpe_payload import DotNetPEPayload
 from .config_decryptor import ConfigDecryptor, IncompatibleDecryptorException
 
-logger = getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 # Is old AES - specifically Rijndael in CBC mode with MD5 hashing for key derivation
@@ -110,14 +110,11 @@ class ConfigDecryptorRijndael(ConfigDecryptor):
                 else:
                     for key_pattern in self._KEY_PATTERNS:
                         key_hit = search(key_pattern, self._payload.data)
-                        if not key_hit:
-                            continue
                         key_rva = bytes_to_int(key_hit.groups()[0])
                         raw_key_field = self._payload.field_name_from_rva(key_rva)
-                        if raw_key_field in encrypted_strings:
-                            key = encrypted_strings[raw_key_field]
-                            self.key = self._derive_key(key)
-                            break
+                        key = encrypted_strings[raw_key_field]
+                        self.key = self._derive_key(key)
+                        break
             except Exception as e:
                 raise ConfigParserException(f"Failed to derive AES key: {e}")
 
