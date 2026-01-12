@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+
+jobs:
+  malware-sample-tests:
+    name: Run malware sample tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y p7zip-full
+          pip install ".[dev]"
+        
+      - name: Decrypt malware samples
+        run: |
+          7z x tests/samples.enc.zip -p'${{ secrets.SAMPLES_ZIP_PASSWORD }}' -otests/samples/
+          ls -la tests/samples/
+
+      - name: Run malware pytest suite
+        run: pytest tests/ --maxfail=1 --disable-warnings -q
+     
+      - name: Clean up samples
+        run: rm -rf tests/samples
+
+    # Run the workflow on approved pull request merges from forked repositories 
+    # and any pull requests from the main repository
+    if: github.event_name == 'pull_request' && (github.event.pull_request.merged == true || github.repository == github.event.pull_request.head.repo.full_name)

@@ -1,0 +1,19 @@
+{
+  "config": {
+    "Groub": "NeverLoseCrack",
+    "Hosts": "act-cleaning.gl.at.ply.gg",
+    "InstallDir": "%ProgramData%",
+    "InstallStr": "svchost.exe",
+    "KEY": "<123456789>",
+    "LoggerPath": "\\Log.tmp",
+    "Mutex": "OkWVOTioL6k3Fg3w",
+    "Port": "37158",
+    "SPL": "<Xwormmm>",
+    "Sleep": 3,
+    "USBNM": "USB.exe"
+  },
+  "key": "c527ac2a4eeb6039d9477583d0f4f2c527ac2a4eeb6039d9477583d0f4f2ee00",
+  "salt": "None",
+  "sha256": "b5bff486f091f9539606931e0aff280eaea17064b2a12940675dfac926e9666e",
+  "yara_possible_family": "xworm"
+}

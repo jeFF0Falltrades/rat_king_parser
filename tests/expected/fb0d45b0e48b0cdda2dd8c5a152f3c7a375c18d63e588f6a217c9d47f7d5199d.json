@@ -1,0 +1,17 @@
+{
+  "config": {
+    "obfuscated_key_1": 3,
+    "obfuscated_key_2": "mo1010.duckdns.org",
+    "obfuscated_key_3": "7000",
+    "obfuscated_key_4": "<123456789>",
+    "obfuscated_key_5": "<Xwormmm>",
+    "obfuscated_key_6": "USB.exe",
+    "obfuscated_key_7": "%AppData%",
+    "obfuscated_key_8": "tBZ7NDtphvUCm0Dc",
+    "obfuscated_key_9": "\\Log.tmp"
+  },
+  "key": "e5f7efe2fddd6755c92cbc39d5559ce5f7efe2fddd6755c92cbc39d5559c4000",
+  "salt": "None",
+  "sha256": "fb0d45b0e48b0cdda2dd8c5a152f3c7a375c18d63e588f6a217c9d47f7d5199d",
+  "yara_possible_family": "xworm"
+}
