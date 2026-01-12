@@ -1,0 +1,25 @@
+{
+  "config": {
+    "An_ti": "false",
+    "Anti_Process": "false",
+    "BS_OD": "false",
+    "Certifi_cate": "MIICMDCCAZmgAwIBAgIVANpXtGwt9qBbU/pdFz8d/Pt6kzb7MA0GCSqGSIb3DQEBDQUAMGQxFTATBgNVBAMMDERjUmF0IFNlcnZlcjETMBEGA1UECwwKcXdxZGFuY2h1bjEcMBoGA1UECgwTRGNSYXQgQnkgcXdxZGFuY2h1bjELMAkGA1UEBwwCU0gxCzAJBgNVBAYTAkNOMB4XDTIxMDIxNzA5MjAzM1oXDTMxMTEyNzA5MjAzM1owEDEOMAwGA1UEAwwFRGNSYXQwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGBAKt8nE3x/0XYeyDBrDPxdpVH1EMWSVyndAkdVChKaWQFOAAs4r/UeTmw8POG3jUz/XczWBWJt9Vu4Vl0HJN3ZmRIMr75FDGyieel0Vb8sn0hZcABsNr8dbbzfi+eoocVAyZKd79S0mOUinl4PBhldyUJCvanCnguHux8c2F5vnQlAgMBAAGjMjAwMB0GA1UdDgQWBBRjACzYO/EcXaKzlTz8Oq34J5Zq8DAPBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBDQUAA4GBACA8urqJU44+IpPcx9i0Q0Eu9+qWMPdZ09y+6YdumC6dun1OHn1I5F03YqYCfCdq0l3XpszJlYYzPnPB4ThOfiKUwJ1HJWS2lgWKfd+CdSWCch0c2dEE1Pao+xyNcNpuphBraHZYc4ojekgeQ8MSdHVo/YCYpmaJbxFWDhFgr3Lh",
+    "De_lay": "1",
+    "Group": "16JUNIO-PJOAO",
+    "Hos_ts": "20.200.63.2",
+    "Hw_id": "null",
+    "In_stall": "false",
+    "Install_File": "",
+    "Install_Folder": "%AppData%",
+    "Key": "dU81ekM1S2pQYmVOWWhQcjV4WlJwcWRkSnVYR2tTQ0w=",
+    "MTX": "DcRatMutex_qwqdanchun",
+    "Paste_bin": "null",
+    "Por_ts": "2525",
+    "Server_signa_ture": "c+KGE0Aw1XRgjGe2Kvay1H3VgUgqKRYGit46DnCR6eW/g+kO+H5oRsfBNkVizj0Q862zTXvLkWZ+ON84bmYhBy3o5YQOPaPyAIXha4ByY150rYRXKkzBR47RkTx616bLYUhqO+PqqNOii9THobbo3zAtwjxEoEWr8s0MLGm2AfE=",
+    "Ver_sion": " 1.0.7"
+  },
+  "key": "3915b12d862a41cce3da2e11ca8cefc26116d0741c23c0748618add80ee31a5c",
+  "salt": "4463526174427971777164616e6368756e",
+  "sha256": "034941c1ea1b1ae32a653aab6371f760dfc4fc43db7c7bf07ac10fc9e98c849e",
+  "yara_possible_family": "dcrat"
+}
