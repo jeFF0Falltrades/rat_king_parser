@@ -92,11 +92,13 @@ class RATConfigParser:
             # Assigned in _decrypt_and_decode_config()
             self._decryptor: ConfigDecryptor = None
             self.report["config"] = self._get_config()
-            self.report["key"] = (
-                self._decryptor.key.hex()
-                if self._decryptor is not None and self._decryptor.key is not None
-                else "None"
-            )
+            key_hex = "None"
+            if self._decryptor is not None and self._decryptor.key is not None:
+                if isinstance(self._decryptor.key, bytes):
+                    key_hex = self._decryptor.key.hex()
+                else:
+                    key_hex = str(self._decryptor.key)
+            self.report["key"] = key_hex
             self.report["salt"] = (
                 self._decryptor.salt.hex()
                 if self._decryptor is not None and self._decryptor.salt is not None
@@ -122,7 +124,7 @@ class RATConfigParser:
                 config_fields_map[k] = field_name
                 item_data[field_name] = v
             if len(item_data) > 0:
-                if type(item) is config_item.EncryptedStringConfigItem:
+                if isinstance(item, config_item.EncryptedStringConfigItem):
                     # Translate config value RVAs to string values
                     for k in item_data:
                         item_data[k] = self._dnpp.user_string_from_rva(item_data[k])
@@ -159,7 +161,7 @@ class RATConfigParser:
                     if self._decryptor is None:
                         raise ConfigParserException("All decryptors failed")
 
-                elif type(item) is config_item.ByteArrayConfigItem:
+                elif isinstance(item, config_item.ByteArrayConfigItem):
                     for k in item_data:
                         arr_size, arr_rva = item_data[k]
                         item_data[k] = self._dnpp.byte_array_from_size_and_rva(
@@ -168,7 +170,7 @@ class RATConfigParser:
 
                 decoded_config.update(item_data)
         # UrlHost is a marker of a special case until this can be standardized
-        if len(decoded_config) < min_config_len and "UrlHost" not in item_data:
+        if len(decoded_config) < min_config_len and "UrlHost" not in decoded_config:
             raise ConfigParserException(
                 f"Minimum threshold of config items not met: {len(decoded_config)}/{min_config_len}"
             )
