@@ -12,6 +12,12 @@ jobs:
   malware-sample-tests:
     name: Run malware sample tests
     runs-on: ubuntu-latest
+    # The job will run if:
+    # 1. It's a push to master (e.g., a merge)
+    # 2. It's a PR from the same repository (internal)
+    if: >
+      github.event_name == 'push' || 
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -37,7 +43,3 @@ jobs:
      
       - name: Clean up samples
         run: rm -rf tests/samples
-
-    # Run the workflow on approved pull request merges from forked repositories 
-    # and any pull requests from the main repository
-    if: github.event_name == 'pull_request' && (github.event.pull_request.merged == true || github.repository == github.event.pull_request.head.repo.full_name)
