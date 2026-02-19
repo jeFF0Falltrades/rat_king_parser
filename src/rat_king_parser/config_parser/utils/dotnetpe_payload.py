@@ -211,7 +211,12 @@ class DotNetPEPayload:
 
     # Given an RVA, derives the corresponding User String
     def user_string_from_rva(self, rva: int) -> str:
-        return self.dotnetpe.net.user_strings.get(rva ^ MDT_STRING).value
+        result = self.dotnetpe.net.user_strings.get(rva ^ MDT_STRING)
+        if result is None:
+            raise ConfigParserException(
+                f"Could not find user string for RVA {hex(rva)}"
+            )
+        return result.value
 
     def custom_attribute_from_type(self, typespacename: str, typename: str) -> dict:
         """
@@ -250,7 +255,7 @@ class DotNetPEPayload:
                 for pd_row_index, pd in enumerate(
                     self.dotnetpe.net.mdtables.Property.rows
                 ):
-                    if pd.Name.value.startswith(
+                    if pd.Name.value.startswith((
                         "Boolean_",
                         "BorderStyle_",
                         "Color_",
@@ -258,7 +263,7 @@ class DotNetPEPayload:
                         "Int32_",
                         "SizeF_",
                         "String_",
-                    ):
+                    )):
                         continue
                     # CustomAttribute Parent index is 1-based
                     target_index = pd_row_index + 1

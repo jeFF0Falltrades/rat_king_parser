@@ -132,7 +132,7 @@ class SpecialFolderConfigItem(ConfigItem):
         try:
             return SpecialFolder(bytes_to_int(folder_id)).name
         except ValueError:
-            return None
+            return f"UnknownFolder({bytes_to_int(folder_id)})"
 
 class EncryptedStringConfigItem(ConfigItem):
     def __init__(self) -> None:
