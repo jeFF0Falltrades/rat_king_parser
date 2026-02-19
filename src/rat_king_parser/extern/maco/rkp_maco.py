@@ -30,7 +30,6 @@ from enum import Enum, auto
 from logging import getLogger
 from pathlib import Path
 from re import search
-from typing import Optional
 
 import validators
 from maco import extractor, model
@@ -64,13 +63,13 @@ class RKPMACO(extractor.Extractor):
     author = "jeFF0Falltrades"
     last_modified = "2024-10-18"
     sharing = "TLP:WHITE"
-    yara_rule = open(str(Path(__file__).parent / YARA_PATH)).read()
+    yara_rule = (Path(__file__).parent / YARA_PATH).read_text()
 
     def run(
         self, stream: typing.BinaryIO, matches: typing.List[Match]
     ) -> typing.Optional[model.ExtractorModel]:
         report = RATConfigParser(
-            load(str(Path(__file__).parent / YARC_PATH)),
+            yara_rule=load(str(Path(__file__).parent / YARC_PATH)),
             data=stream.read(),
             remap_config=True,
         ).report
@@ -191,7 +190,7 @@ class RKPMACO(extractor.Extractor):
 
     # Helper function to handle both IPv4 and IPv6 values
     def _add_tcp_ip(
-        self, model: model.ExtractorModel, server_ip: str, server_port: Optional[int]
+        self, model: model.ExtractorModel, server_ip: str, server_port: typing.Optional[int]
     ) -> None:
         model.tcp.append(
             model.Connection(server_ip=server_ip, server_port=server_port, usage="c2")
@@ -201,7 +200,7 @@ class RKPMACO(extractor.Extractor):
     # suffixed to the host/IP
     def _split_network_value(
         self, network_value: str
-    ) -> typing.Tuple[str, Optional[int]]:
+    ) -> typing.Tuple[str, typing.Optional[int]]:
         match = search(r":([0-9]+)$", network_value)
         if match is not None:
             try:
