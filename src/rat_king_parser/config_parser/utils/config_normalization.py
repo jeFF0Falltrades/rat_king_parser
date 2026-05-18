@@ -39,14 +39,16 @@ normalized_keys = {
     "Group": ("Group", "Groub", "GroupTag", "TAG"),
 }
 
+_normalized_keys_map = {
+    alias: k for k, aliases in normalized_keys.items() for alias in aliases
+}
+
 
 # Normalizes config keys/values for easier mapping
 def check_key_n_value(key: str, value: Any) -> tuple[str, Any]:
-    key = key.replace("_", "")
-    for k, v in normalized_keys.items():
-        if key in v:
-            key = k
-            break
+    key_clean = key.replace("_", "")
+    if key_clean in _normalized_keys_map:
+        key = _normalized_keys_map[key_clean]
 
     if key in ("Hosts", "Ports") and isinstance(value, str):
         if value not in ("null", "false"):

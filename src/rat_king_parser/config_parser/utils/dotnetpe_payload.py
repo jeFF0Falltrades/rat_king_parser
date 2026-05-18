@@ -28,6 +28,7 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+from bisect import bisect_right
 from dataclasses import dataclass
 from hashlib import sha256
 from logging import getLogger
@@ -83,6 +84,13 @@ class DotNetPEPayload:
         self._methods = self._generate_method_list()
         self._methods_by_offset = sorted(self._methods, key=lambda m: m.offset)
         self._methods_by_token = sorted(self._methods, key=lambda m: m.token)
+        self._offsets = [m.offset for m in self._methods_by_offset]
+
+        # Pre-compute FieldRva mapping for O(1) lookups
+        self._field_rva_map = {
+            row.struct.Field_Index: row.struct.Rva
+            for row in self.dotnetpe.net.mdtables.FieldRva
+        }
 
     # Given a byte array's size and RVA, translates the RVA to the offset of
     # the byte array and returns the bytes of the array as a byte string
@@ -122,9 +130,8 @@ class DotNetPEPayload:
     # Given an RVA, derives the corresponding FieldRVA value
     def fieldrva_from_rva(self, rva: int) -> int:
         field_id = rva ^ MDT_FIELD_DEF
-        for row in self.dotnetpe.net.mdtables.FieldRva:
-            if row.struct.Field_Index == field_id:
-                return row.struct.Rva
+        if field_id in self._field_rva_map:
+            return self._field_rva_map[field_id]
         raise ConfigParserException(f"Could not find FieldRVA for RVA {rva}")
 
     # Generates a list of DotNetPEMethod objects for efficient lookups of method
@@ -194,8 +201,12 @@ class DotNetPEPayload:
     def method_from_instruction_offset(
         self, ins_offset: int, step: int = 0, by_token: bool = False
     ) -> DotNetPEMethod:
-        for idx, method in enumerate(self._methods_by_offset):
+        idx = bisect_right(self._offsets, ins_offset) - 1
+        if idx >= 0:
+            method = self._methods_by_offset[idx]
             if method.offset <= ins_offset < method.offset + method.size:
+                if step == 0:
+                    return method
                 return (
                     self._methods_by_token[self._methods_by_token.index(method) + step]
                     if by_token
