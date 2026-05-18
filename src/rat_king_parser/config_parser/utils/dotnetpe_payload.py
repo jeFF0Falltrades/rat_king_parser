@@ -85,6 +85,7 @@ class DotNetPEPayload:
         self._methods_by_offset = sorted(self._methods, key=lambda m: m.offset)
         self._methods_by_token = sorted(self._methods, key=lambda m: m.token)
         self._offsets = [m.offset for m in self._methods_by_offset]
+        self._tokens = [m.token for m in self._methods_by_token]
 
         # Pre-compute FieldRva mapping for O(1) lookups
         self._field_rva_map = {
