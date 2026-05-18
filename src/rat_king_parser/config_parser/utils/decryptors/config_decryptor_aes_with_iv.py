@@ -36,8 +36,6 @@ from logging import getLogger
 from typing import Tuple
 
 from Cryptodome.Cipher import AES
-from Cryptodome.Cipher.AES import MODE_CBC as CBC
-from Cryptodome.Cipher.AES import MODE_CFB as CFB
 from Cryptodome.Protocol.KDF import PBKDF2
 from Cryptodome.Util.Padding import unpad
 
@@ -54,8 +52,8 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
     # Minimum length of valid ciphertext
     _MIN_CIPHERTEXT_LEN = 48
     _ALGO_MAP = {
-        b"\x17": CBC,
-        b"\x1a": CFB,
+        b"\x17": AES.MODE_CBC,
+        b"\x1a": AES.MODE_CFB,
     }
 
     # Patterns for identifying AES metadata
@@ -66,9 +64,7 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
     # Do not re.compile in-line replacement patterns
     _PATTERN_AES_KEY_BASE = b"(.{3}\x04).%b"
     _PATTERN_AES_SALT_INIT = b"\x80%b\x2a"
-    _PATTERN_AES_SALT_ITER = re.compile(
-        b"[\x02-\x05]\x7e(.{4})\x20(.{4})\x73", re.DOTALL
-    )
+    _PATTERN_AES_SALT_ITER = re.compile(b"[\x02-\x05]\x7e(.{4})\x20(.{4})\x73", re.DOTALL)
 
     def __init__(self, payload: DotNetPEPayload) -> None:
         super().__init__(payload)
@@ -77,7 +73,7 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
         self._key_candidates: list[bytes] = None
         self._key_size: int = None
         self._key_rva: int = None
-        self._aes_algo = CBC
+        self._aes_algo = AES.MODE_CBC
         try:
             self._get_aes_metadata()
         except Exception as e:
@@ -89,19 +85,16 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
         logger.debug(
             f"Decrypting {ciphertext} with key {self.key.hex()} and IV {iv.hex()}..."
         )
-
         cipher = AES.new(self.key, mode=self._aes_algo, iv=iv)
 
-        unpadded_text = ""
         padded_text = cipher.decrypt(ciphertext)
         try:
-            # Attempt to unpad first
+            # Attempt to unpad
             unpadded_text = unpad(padded_text, AES.block_size)
         except Exception as e:
             raise ConfigParserException(
                 f"Error decrypting ciphertext {ciphertext} with IV {iv.hex()} and key {self.key.hex()} : {e}"
             )
-
         logger.debug(f"Decryption result: {unpadded_text}")
         return unpadded_text
 
@@ -118,13 +111,15 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
 
     # Decrypts encrypted config values with the provided cipher data
     def decrypt_encrypted_strings(
-        self, encrypted_strings: dict[str, str]
-    ) -> dict[str, str]:
+        self, encrypted_strings: dict[str, str]) -> dict[str, str]:
         logger.debug("Decrypting encrypted strings...")
         if self._key_candidates is None:
             self._key_candidates = self._get_aes_key_candidates(encrypted_strings)
 
         decrypted_config_strings = {}
+        successfully_decrypted_count = 0
+        successful_key = None
+
         for k, v in encrypted_strings.items():
             # Leave empty strings as they are
             if len(v) == 0:
@@ -150,59 +145,88 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
             # after the IV, and run the decryption
             iv, ciphertext = decoded_val[32:48], decoded_val[48:]
             result, last_exc = None, None
-            key_idx = 0
-            # Run through key candidates until suitable one found or failure
-            while result is None and key_idx < len(self._key_candidates):
+
+            # Try the successful key first if we found one
+            if successful_key:
                 try:
-                    self.key = self._key_candidates[key_idx]
-                    key_idx += 1
+                    self.key = successful_key
                     result = decode_bytes(self._decrypt(iv, ciphertext))
-                except ConfigParserException as e:
+                except (ValueError, ConfigParserException) as e:
                     last_exc = e
+                    result = None
+
+            # Run through key candidates until suitable one found or failure
+            if result is None:
+                for candidate_key in self._key_candidates:
+                    if candidate_key == successful_key:
+                        continue
+                    try:
+                        self.key = candidate_key
+                        result = decode_bytes(self._decrypt(iv, ciphertext))
+                        successful_key = candidate_key
+                        break
+                    except (ValueError, ConfigParserException) as e:
+                        last_exc = e
 
             if result is None:
                 logger.debug(
                     f"Decryption failed for item {v}: {last_exc}; Leaving as original value..."
                 )
                 result = v
+            else:
+                successfully_decrypted_count += 1
 
             logger.debug(f"Key: {k}, Value: {result}")
             decrypted_config_strings[k] = result
+
+        if successfully_decrypted_count == 0:
+            raise ConfigParserException(
+                "No strings could be decrypted with the available keys"
+            )
+
+        # Set the key to the successful one for reporting
+        if successful_key:
+            self.key = successful_key
 
         logger.debug("Successfully decrypted strings")
         return decrypted_config_strings
 
     # Extracts AES key candidates from the payload
-    def _get_aes_key_candidates(self, encrypted_strings: dict[str, str]) -> list[bytes]:
+    def _get_aes_key_candidates(
+        self, encrypted_strings: dict[str, str]):  # -> list[bytes]:
         logger.debug("Extracting AES key candidates...")
         keys = []
 
-        # Use the key Field name to index into our existing config
-        key_raw_value = encrypted_strings[
-            self._payload.field_name_from_rva(self._key_rva)
-        ]
-        passphrase_candidates = self._derive_aes_passphrase_candidates(key_raw_value)
-
-        for candidate in passphrase_candidates:
-            try:
-                key = PBKDF2(candidate, self.salt, self._key_size, self._iterations)
-                keys.append(key)
-                logger.debug(f"AES key derived: {keys[-1]}")
-            except Exception as e:
-                logger.debug(f"Error in key generation: {e}")
+        # We need to try all combinations of metadata candidates and their passphrase candidates
+        for meta in self._metadata_candidates:
+            field_name = self._payload.field_name_from_rva(meta["key_rva"])
+            if field_name not in encrypted_strings:
                 continue
+
+            key_raw_value = encrypted_strings[field_name]
+            passphrase_candidates = self._derive_aes_passphrase_candidates(key_raw_value)
+
+            for candidate in passphrase_candidates:
+                try:
+                    key = PBKDF2(
+                        candidate, meta["salt"], self._key_size, meta["iterations"]
+                    )
+                    if key not in keys:
+                        keys.append(key)
+                        logger.debug(f"AES key derived: {key.hex()}")
+                except Exception as e:
+                    logger.debug(f"Error in key generation: {e}")
+                    continue
         if len(keys) == 0:
             raise ConfigParserException(
-                f"Could not derive key from passphrase candidates: {passphrase_candidates}"
+                "Could not derive key from any metadata candidate"
             )
         return keys
 
     # Extracts the AES key and block size from the payload
     def _get_aes_key_and_block_size_and_algo(self) -> Tuple[int, int, int]:
         logger.debug("Extracting AES key and block size...")
-        hit = re.search(
-            self._PATTERN_AES_KEY_AND_BLOCK_SIZE_AND_ALGO, self._payload.data
-        )
+        hit = re.search(self._PATTERN_AES_KEY_AND_BLOCK_SIZE_AND_ALGO, self._payload.data)
         if hit is None:
             raise ConfigParserException("Could not extract AES key or block size")
 
@@ -222,9 +246,7 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
         logger.debug("Extracting AES key RVA...")
 
         # Get the RVA of the method that sets up AES256 metadata
-        metadata_method_token = self._payload.method_from_instruction_offset(
-            metadata_ins_offset, by_token=True
-        ).token
+        metadata_method_token = self._payload.method_from_instruction_offset(metadata_ins_offset, by_token=True).token
         # Insert this RVA into the KEY_BASE pattern to find where the AES key
         # is initialized
         key_hit = re.search(
@@ -243,29 +265,34 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
     # sets the necessary values needed for decryption
     def _get_aes_metadata(self) -> None:
         logger.debug("Extracting AES metadata...")
-        metadata = None
+        self._metadata_candidates = []
         # Some payloads have multiple embedded salt values:
-        # Find the one that is actually used for initialization
-        for candidate in re.finditer(self._PATTERN_AES_SALT_ITER, self._payload.data):
+        # Find the ones that are actually used for initialization
+        for hit in re.finditer(self._PATTERN_AES_SALT_ITER, self._payload.data):
             try:
-                self.salt = self._get_aes_salt(candidate.groups()[0])
-                metadata = candidate
-                self._key_rva = self._get_aes_key_rva(metadata.start())
+                salt = self._get_aes_salt(hit.groups()[0])
+                key_rva = self._get_aes_key_rva(hit.start())
+                iterations = bytes_to_int(hit.groups()[1])
+                self._metadata_candidates.append(
+                    {"salt": salt, "key_rva": key_rva, "iterations": iterations}
+                )
             except ConfigParserException as cfe:
                 logger.info(
-                    f"Initialization using salt candidate {hex(bytes_to_int(candidate.groups()[0]))} failed: {cfe}"
+                    f"Initialization using salt candidate {hex(bytes_to_int(hit.groups()[0]))} failed: {cfe}"
                 )
                 continue
-        if metadata is None:
+        if not self._metadata_candidates:
             raise ConfigParserException("Could not identify AES metadata")
-        logger.debug(f"AES metadata found at offset {hex(metadata.start())}")
+
+        # Extraction of common metadata
         self._key_size, self._block_size, self._aes_algo = (
             self._get_aes_key_and_block_size_and_algo()
         )
 
-        logger.debug("Extracting AES iterations...")
-        self._iterations = bytes_to_int(metadata.groups()[1])
-        logger.debug(f"Found AES iteration number of {self._iterations}")
+        # Legacy fields for backward compatibility, use first valid candidate
+        self.salt = self._metadata_candidates[0]["salt"]
+        self._key_rva = self._metadata_candidates[0]["key_rva"]
+        self._iterations = self._metadata_candidates[0]["iterations"]
 
     # Extracts the AES salt from the payload, accounting for both hardcoded
     # salt byte arrays, and salts derived from hardcoded strings
@@ -278,9 +305,7 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
         #
         # stsfld	uint8[] Client.Algorithm.Aes256::Salt
         # ret
-        aes_salt_initialization = self._payload.data.find(
-            self._PATTERN_AES_SALT_INIT % salt_rva
-        )
+        aes_salt_initialization = self._payload.data.find(self._PATTERN_AES_SALT_INIT % salt_rva)
         if aes_salt_initialization == -1:
             raise ConfigParserException("Could not identify AES salt initialization")
 
@@ -292,9 +317,7 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
         salt_op = bytes([self._payload.data[salt_op_offset]])
 
         # Get the salt RVA from the 4 bytes following the initialization op
-        salt_strings_rva_packed = self._payload.data[
-            salt_op_offset + 1 : salt_op_offset + 5
-        ]
+        salt_strings_rva_packed = self._payload.data[salt_op_offset + 1 : salt_op_offset + 5]
         salt_strings_rva = bytes_to_int(salt_strings_rva_packed)
 
         # If the op is a ldstr op, just get the bytes value of the string being
@@ -309,9 +332,7 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
         # byte array value from the FieldRVA table
         elif salt_op == OPCODE_LDTOKEN:
             salt_size = self._payload.data[salt_op_offset - 7]
-            salt = self._payload.byte_array_from_size_and_rva(
-                salt_size, salt_strings_rva
-            )
+            salt = self._payload.byte_array_from_size_and_rva(salt_size, salt_strings_rva)
         else:
             raise ConfigParserException(f"Unknown salt opcode found: {salt_op.hex()}")
 
