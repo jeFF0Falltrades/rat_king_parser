@@ -197,7 +197,8 @@ class RATConfigParser:
                 # Case 1: Values are Strings (e.g. "1.2.3.4:80")
                 if isinstance(existing_val, str) and value:
                     # Append with a comma separator
-                    remapped_config[key_normalized] = f"{existing_val},{value}"
+                    new_val = ",".join(map(str, value)) if isinstance(value, list) else value
+                    remapped_config[key_normalized] = f"{existing_val},{new_val}"
 
                 # Case 2: Values are Lists (e.g. ["1.2.3.4:80"])
                 elif isinstance(existing_val, list):
