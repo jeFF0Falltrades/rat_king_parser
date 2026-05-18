@@ -209,7 +209,7 @@ class DotNetPEPayload:
                 if step == 0:
                     return method
                 return (
-                    self._methods_by_token[self._methods_by_token.index(method) + step]
+                    self._methods_by_token[bisect_right(self._tokens, method.token) - 1 + step]
                     if by_token
                     else self._methods_by_offset[idx + step]
                 )
