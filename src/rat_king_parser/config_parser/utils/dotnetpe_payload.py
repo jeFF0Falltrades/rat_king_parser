@@ -28,6 +28,7 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+from bisect import bisect_right
 from dataclasses import dataclass
 from hashlib import sha256
 from logging import getLogger
@@ -72,6 +73,8 @@ class DotNetPEPayload:
                 self.dotnetpe = dnPE(data=self.data, clr_lazy_load=True)
             else:
                 self.dotnetpe = dnPE(self.file_path, clr_lazy_load=True)
+            if not self.dotnetpe.net or not self.dotnetpe.net.mdtables:
+                raise ConfigParserException("Failed to load project as dotnet executable (missing Metadata)")
         except Exception:
             raise ConfigParserException("Failed to load project as dotnet executable")
 
@@ -83,13 +86,23 @@ class DotNetPEPayload:
         self._methods = self._generate_method_list()
         self._methods_by_offset = sorted(self._methods, key=lambda m: m.offset)
         self._methods_by_token = sorted(self._methods, key=lambda m: m.token)
+        self._offsets = [m.offset for m in self._methods_by_offset]
+        self._tokens = [m.token for m in self._methods_by_token]
+
+        # Pre-compute FieldRva mapping for O(1) lookups
+        self._field_rva_map = {}
+        if getattr(self.dotnetpe.net.mdtables, "FieldRva", None):
+            self._field_rva_map = {
+                row.struct.Field_Index: row.struct.Rva
+                for row in self.dotnetpe.net.mdtables.FieldRva
+            }
 
     # Given a byte array's size and RVA, translates the RVA to the offset of
     # the byte array and returns the bytes of the array as a byte string
     def byte_array_from_size_and_rva(self, arr_size: int, arr_rva: int) -> bytes:
         arr_field_rva = self.fieldrva_from_rva(arr_rva)
         arr_offset = self.offset_from_rva(arr_field_rva)
-        return self.data[arr_offset : arr_offset + arr_size]
+        return self.data[arr_offset: arr_offset + arr_size]
 
     # Given an offset, and either a terminating offset or delimiter, extracts
     # the byte string
@@ -113,7 +126,10 @@ class DotNetPEPayload:
     # Given an RVA, derives the corresponding Field name
     def field_name_from_rva(self, rva: int) -> str:
         try:
-            return self.dotnetpe.net.mdtables.Field.rows[
+            field_table = getattr(self.dotnetpe.net.mdtables, "Field", None)
+            if not field_table:
+                raise ConfigParserException(f"Could not find Field table for RVA {rva}")
+            return field_table.rows[
                 (rva ^ MDT_FIELD_DEF) - 1
             ].Name.value
         except Exception:
@@ -122,9 +138,8 @@ class DotNetPEPayload:
     # Given an RVA, derives the corresponding FieldRVA value
     def fieldrva_from_rva(self, rva: int) -> int:
         field_id = rva ^ MDT_FIELD_DEF
-        for row in self.dotnetpe.net.mdtables.FieldRva:
-            if row.struct.Field_Index == field_id:
-                return row.struct.Rva
+        if field_id in self._field_rva_map:
+            return self._field_rva_map[field_id]
         raise ConfigParserException(f"Could not find FieldRVA for RVA {rva}")
 
     # Generates a list of DotNetPEMethod objects for efficient lookups of method
@@ -133,8 +148,11 @@ class DotNetPEPayload:
         self,
     ) -> list[DotNetPEMethod]:
         method_objs = []
+        method_def_table = getattr(self.dotnetpe.net.mdtables, "MethodDef", None)
+        if not method_def_table:
+            return method_objs
 
-        for idx, method in enumerate(self.dotnetpe.net.mdtables.MethodDef.rows):
+        for idx, method in enumerate(method_def_table.rows):
             method_offset = self.offset_from_rva(method.Rva)
 
             # Parse size from flags
@@ -144,7 +162,7 @@ class DotNetPEPayload:
                 method_size = flags >> 2
             elif flags & 3 == 3:  # Fat format (add 12-byte header)
                 method_size = 12 + bytes_to_int(
-                    self.data[method_offset + 4 : method_offset + 8]
+                    self.data[method_offset + 4: method_offset + 8]
                 )
 
             method_objs.append(
@@ -194,10 +212,14 @@ class DotNetPEPayload:
     def method_from_instruction_offset(
         self, ins_offset: int, step: int = 0, by_token: bool = False
     ) -> DotNetPEMethod:
-        for idx, method in enumerate(self._methods_by_offset):
+        idx = bisect_right(self._offsets, ins_offset) - 1
+        if idx >= 0:
+            method = self._methods_by_offset[idx]
             if method.offset <= ins_offset < method.offset + method.size:
+                if step == 0:
+                    return method
                 return (
-                    self._methods_by_token[self._methods_by_token.index(method) + step]
+                    self._methods_by_token[bisect_right(self._tokens, method.token) - 1 + step]
                     if by_token
                     else self._methods_by_offset[idx + step]
                 )
@@ -240,21 +262,28 @@ class DotNetPEPayload:
         config = {}
         try:
             ca_map = {}
-            for ca in self.dotnetpe.net.mdtables.CustomAttribute.rows:
-                idx = ca.Parent.row_index
-                if idx not in ca_map:
-                    ca_map[idx] = []
-                ca_map[idx].append(ca)
+            ca_table = getattr(self.dotnetpe.net.mdtables, "CustomAttribute", None)
+            if ca_table:
+                for ca in ca_table.rows:
+                    idx = ca.Parent.row_index
+                    if idx not in ca_map:
+                        ca_map[idx] = []
+                    ca_map[idx].append(ca)
 
-            for td in self.dotnetpe.net.mdtables.TypeDef.rows:
+            td_table = getattr(self.dotnetpe.net.mdtables, "TypeDef", None)
+            if not td_table:
+                return config
+
+            for td in td_table.rows:
                 if (
                     td.TypeNamespace.value != typespacename
                     and td.TypeName.value != typename
                 ):
                     continue
-                for pd_row_index, pd in enumerate(
-                    self.dotnetpe.net.mdtables.Property.rows
-                ):
+                prop_table = getattr(self.dotnetpe.net.mdtables, "Property", None)
+                if not prop_table:
+                    continue
+                for pd_row_index, pd in enumerate(prop_table.rows):
                     if pd.Name.value.startswith((
                         "Boolean_",
                         "BorderStyle_",
