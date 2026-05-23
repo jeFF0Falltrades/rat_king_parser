@@ -171,9 +171,8 @@ class RATConfigParser:
                 logger.debug(f"Decryption failed with decryptor {decryptor} : {e}")
                 self._decryptor = None
 
-        if self._decryptor is None:
-            raise ConfigParserException("All decryptors failed")
-        return item_data
+        # If we exit the loop without returning, no decryptor succeeded
+        raise ConfigParserException("All decryptors failed")
 
     def _remap_config(
         self, decoded_config: dict[str, Any], config_fields_map: dict[int, str]

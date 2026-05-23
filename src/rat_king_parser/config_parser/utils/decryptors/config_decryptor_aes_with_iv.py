@@ -111,12 +111,14 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
 
     # Decrypts encrypted config values with the provided cipher data
     def decrypt_encrypted_strings(
-        self, encrypted_strings: dict[str, str]) -> dict[str, str]:
+        self, encrypted_strings: dict[str, str]
+    ) -> dict[str, str]:
         logger.debug("Decrypting encrypted strings...")
         if self._key_candidates is None:
             self._key_candidates = self._get_aes_key_candidates(encrypted_strings)
 
         decrypted_config_strings = {}
+        attempted_decryptions = 0
         successfully_decrypted_count = 0
         successful_key = None
 
@@ -140,9 +142,11 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
                 decrypted_config_strings[k] = v
                 continue
 
-            # Otherwise, extract the IV from the 16 bytes after the HMAC
-            # (first 32 bytes) and the ciphertext from the rest of the data
-            # after the IV, and run the decryption
+            # Past this point we are actually attempting a decryption
+            attempted_decryptions += 1
+            # Extract the IV from the 16 bytes after the HMAC (first 32 bytes)
+            # and the ciphertext from the rest of the data after the IV, and
+            # run the decryption
             iv, ciphertext = decoded_val[32:48], decoded_val[48:]
             result, last_exc = None, None
 
@@ -179,7 +183,12 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
             logger.debug(f"Key: {k}, Value: {result}")
             decrypted_config_strings[k] = result
 
-        if successfully_decrypted_count == 0:
+        # Only raise if we actually tried to decrypt at least one string and
+        # none succeeded. Template/builder samples have 0 attempts (all values
+        # are placeholders that fail the b64/length filter above), and should
+        # fall through cleanly so this AES decryptor remains the active one
+        # and its salt is still reported.
+        if attempted_decryptions > 0 and successfully_decrypted_count == 0:
             raise ConfigParserException(
                 "No strings could be decrypted with the available keys"
             )
@@ -193,7 +202,8 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
 
     # Extracts AES key candidates from the payload
     def _get_aes_key_candidates(
-        self, encrypted_strings: dict[str, str]) -> list[bytes]:
+        self, encrypted_strings: dict[str, str]
+    ) -> list[bytes]:
         logger.debug("Extracting AES key candidates...")
         keys = []
 
@@ -284,7 +294,9 @@ class ConfigDecryptorAESWithIV(ConfigDecryptor):
         if not self._metadata_candidates:
             raise ConfigParserException("Could not identify AES metadata")
 
-        # Extraction of common metadata
+        # Key size, block size, and algo are properties of the embedded AES
+        # class definition, not of any single salt/iter candidate, so they are
+        # extracted once and shared across all metadata candidates
         self._key_size, self._block_size, self._aes_algo = (
             self._get_aes_key_and_block_size_and_algo()
         )
