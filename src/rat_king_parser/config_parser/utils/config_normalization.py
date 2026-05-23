@@ -39,16 +39,23 @@ normalized_keys = {
     "Group": ("Group", "Groub", "GroupTag", "TAG"),
 }
 
+# Strip underscores from aliases at build time so the lookup is consistent
+# with the underscore-stripped input key (e.g. so "mutex_string" actually
+# resolves to "Mutex")
 _normalized_keys_map = {
-    alias: k for k, aliases in normalized_keys.items() for alias in aliases
+    alias.replace("_", ""): k
+    for k, aliases in normalized_keys.items()
+    for alias in aliases
 }
 
 
 # Normalizes config keys/values for easier mapping
 def check_key_n_value(key: str, value: Any) -> tuple[str, Any]:
-    key_clean = key.replace("_", "")
-    if key_clean in _normalized_keys_map:
-        key = _normalized_keys_map[key_clean]
+    # Always strip underscores from the returned key to preserve the prior
+    # behavior of this function for unrecognized keys
+    key = key.replace("_", "")
+    if key in _normalized_keys_map:
+        key = _normalized_keys_map[key]
 
     if key in ("Hosts", "Ports") and isinstance(value, str):
         if value not in ("null", "false"):
