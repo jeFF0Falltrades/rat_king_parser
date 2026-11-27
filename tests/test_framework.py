@@ -183,8 +183,13 @@ def test_decode_bytes_preserves_whitespace_and_avoids_mojibake() -> None:
     assert decode_bytes("127.0.0.1".encode("utf-16le")) == "127.0.0.1"
     assert decode_bytes("Ingresá".encode("utf-16le")) == "Ingresá"
     assert decode_bytes("A".encode("utf-16le")) == "A"
-    # Even-length null-terminated UTF-8 must NOT decode as CJK mojibake
+    # Even-length null-terminated / null-padded UTF-8 must NOT decode as CJK mojibake
     assert decode_bytes(b"127.0.0.1\x00") == "127.0.0.1"
+    assert decode_bytes(b"80\x00\x00") == "80"
+    assert decode_bytes(b"1234\x00\x00\x00\x00") == "1234"
+    # Non-null control bytes (e.g. wrong-key ECB fallback) must raise
+    with pytest.raises(ConfigParserException):
+        decode_bytes(b"\x01\x02\x03\x04\x05\x06\x07\x08")
     # Wrong-key random block containing a stray 0x00 and control bytes must raise
     with pytest.raises(ConfigParserException):
         decode_bytes(b"\x01\x02\x00\x04\x05\x06\x07\x08\x09\x0b\x0c\x0e\x0f\x10\x11\x12")
@@ -265,6 +270,10 @@ def test_cil_walker_avoids_unaligned_collisions_and_preserves_order() -> None:
     assert by_cls[config_item.EncryptedStringConfigItem] == {
         MDT_FIELD_DEF | 8: MDT_STRING | 1
     }
+    # Invalid Fat headers with Size nibble < 3 (< 12 bytes) must be rejected
+    assert config_item._extract_cil_il_bytes(_fat_method(b"\x2a", header_dwords=0)) is None
+    assert config_item._extract_cil_il_bytes(_fat_method(b"\x2a", header_dwords=1)) is None
+    assert config_item._extract_cil_il_bytes(_fat_method(b"\x2a", header_dwords=2)) is None
 
 
 def test_config_item_parse_from_exception_does_not_crash_on_hex_bytes() -> None:
@@ -305,10 +314,12 @@ def test_dotnetpe_tiny_header_size_rva_zero_and_bounds() -> None:
     tiny_bytes = _tiny_method(tiny_il)
     fat_il = b"\x00\x2a"
     fat_bytes = _fat_method(fat_il, header_dwords=4)  # 16-byte header + 2 = 18
+    bad_fat_bytes = _fat_method(fat_il, header_dwords=2)  # invalid < 12-byte Fat header
 
-    raw = b"MZ" + b"\x00" * 14 + tiny_bytes + fat_bytes
+    raw = b"MZ" + b"\x00" * 14 + tiny_bytes + fat_bytes + bad_fat_bytes
     tiny_off = 16
     fat_off = 16 + len(tiny_bytes)
+    bad_fat_off = fat_off + len(fat_bytes)
 
     payload = _make_bare_payload(raw)
     rows = [
@@ -316,6 +327,7 @@ def test_dotnetpe_tiny_header_size_rva_zero_and_bounds() -> None:
         SimpleNamespace(Rva=0x999999, Name=SimpleNamespace(value="InvalidRva")),
         SimpleNamespace(Rva=tiny_off, Name=SimpleNamespace(value="TinyMethod")),
         SimpleNamespace(Rva=fat_off, Name=SimpleNamespace(value="FatMethod")),
+        SimpleNamespace(Rva=bad_fat_off, Name=SimpleNamespace(value="BadFatMethod")),
     ]
     payload.dotnetpe = SimpleNamespace(
         net=SimpleNamespace(
@@ -328,12 +340,14 @@ def test_dotnetpe_tiny_header_size_rva_zero_and_bounds() -> None:
     )
 
     methods = payload._generate_method_list()
-    assert [m.name for m in methods] == ["TinyMethod", "FatMethod"]
+    assert [m.name for m in methods] == ["TinyMethod", "FatMethod", "BadFatMethod"]
     # Tiny method must include the full body including trailing ret (0x2a)
     assert methods[0].size == len(tiny_bytes)
     assert payload.method_body_from_method(methods[0]) == tiny_bytes
     # Fat method respects 4-dword header size (16 + 2 = 18)
     assert methods[1].size == len(fat_bytes)
+    # Invalid Fat header nibble < 3 yields 0-size method rather than slicing header
+    assert methods[2].size == 0
 
     payload._methods = methods
     payload._methods_by_offset = sorted(methods, key=lambda m: m.offset)
@@ -347,11 +361,16 @@ def test_dotnetpe_tiny_header_size_rva_zero_and_bounds() -> None:
     with pytest.raises(ConfigParserException):
         payload.method_from_instruction_offset(tiny_off, step=-1)
     with pytest.raises(ConfigParserException):
-        payload.method_from_instruction_offset(fat_off, step=1)
+        payload.method_from_instruction_offset(fat_off, step=2)
     with pytest.raises(ConfigParserException):
-        payload.method_from_instruction_offset(fat_off, step=1, by_token=True)
+        payload.method_from_instruction_offset(fat_off, step=2, by_token=True)
 
-    # user_string_from_rva raises ConfigParserException when user_strings is None
+    # user_string_from_rva raises ConfigParserException when user_strings is None or value is None
+    with pytest.raises(ConfigParserException):
+        payload.user_string_from_rva(MDT_STRING | 1)
+    payload.dotnetpe.net.user_strings = SimpleNamespace(
+        get=lambda _idx: SimpleNamespace(value=None)
+    )
     with pytest.raises(ConfigParserException):
         payload.user_string_from_rva(MDT_STRING | 1)
 
@@ -359,9 +378,15 @@ def test_dotnetpe_tiny_header_size_rva_zero_and_bounds() -> None:
 def test_dotnetpe_field_name_and_byte_string_bounds() -> None:
     payload = _make_bare_payload(b"hello\x00world")
     payload._field_table = SimpleNamespace(
-        rows=[SimpleNamespace(Name=SimpleNamespace(value="FieldOne"))]
+        rows=[
+            SimpleNamespace(Name=SimpleNamespace(value="FieldOne")),
+            SimpleNamespace(Name=SimpleNamespace(value=None)),
+        ]
     )
     assert payload.field_name_from_rva(MDT_FIELD_DEF | 1) == "FieldOne"
+    # Invalid UTF-8 Field.Name (value=None) must raise ConfigParserException
+    with pytest.raises(ConfigParserException):
+        payload.field_name_from_rva(MDT_FIELD_DEF | 2)
     # RID 0 (0x04000000) must raise, not wrap to rows[-1]
     with pytest.raises(ConfigParserException):
         payload.field_name_from_rva(MDT_FIELD_DEF)
@@ -405,11 +430,14 @@ def test_dotnetpe_custom_attribute_from_type_fixes() -> None:
         rows=[
             SimpleNamespace(
                 Parent=SimpleNamespace(row_index=1),
-                PropertyList=SimpleNamespace(row_index=1),
+                PropertyList=[SimpleNamespace(row_index=1)],
             ),
             SimpleNamespace(
                 Parent=SimpleNamespace(row_index=2),
-                PropertyList=SimpleNamespace(row_index=2),
+                PropertyList=[
+                    SimpleNamespace(row_index=2),
+                    SimpleNamespace(row_index=3),
+                ],
             ),
         ]
     )
@@ -1048,63 +1076,66 @@ def test_rkp_maco_wrapper_reuses_matches_and_validates_network_values(
     monkeypatch.setitem(sys.modules, "maco", fake_maco)
     monkeypatch.setitem(sys.modules, "maco.extractor", fake_extractor)
     monkeypatch.setitem(sys.modules, "maco.model", fake_model)
-    sys.modules.pop("rat_king_parser.extern.maco.rkp_maco", None)
+    mod_name = "rat_king_parser.extern.maco.rkp_maco"
+    monkeypatch.delitem(sys.modules, mod_name, raising=False)
+    try:
+        rkp_maco = importlib.import_module(mod_name)
 
-    rkp_maco = importlib.import_module("rat_king_parser.extern.maco.rkp_maco")
+        seen_yara_args = []
 
-    seen_yara_args = []
+        class _FakeParser:
+            def __init__(self, yara_rule=None, data=None, remap_config=False):
+                seen_yara_args.append(yara_rule)
+                self.error = None
+                self.report = {
+                    "yara_possible_family": "",
+                    "key": "deadbeef",
+                    "salt": "cafebabe",
+                    "config": {
+                        "Mutex": "null",
+                        "Version": "1.2.3",
+                        "Ports": [True, "4444", "99999", "²", 8080],
+                        "Hosts": [
+                            "[2001:db8::1]:4444",
+                            "1.2.3.4:5555",
+                            "web.example.com:443",
+                            "c2.example.com:9000",
+                            "https://panel.example.com:8443/gate",
+                            12345,  # non-str in list must not crash
+                        ],
+                        "Group": "CampA",
+                        "TelegramToken": "123:ABC",
+                    },
+                }
 
-    class _FakeParser:
-        def __init__(self, yara_rule=None, data=None, remap_config=False):
-            seen_yara_args.append(yara_rule)
-            self.error = None
-            self.report = {
-                "yara_possible_family": "",
-                "key": "deadbeef",
-                "salt": "cafebabe",
-                "config": {
-                    "Mutex": "null",
-                    "Version": "1.2.3",
-                    "Ports": [True, "4444", "99999", "²", 8080],
-                    "Hosts": [
-                        "[2001:db8::1]:4444",
-                        "1.2.3.4:5555",
-                        "web.example.com:443",
-                        "c2.example.com:9000",
-                        "https://panel.example.com:8443/gate",
-                        12345,  # non-str in list must not crash
-                    ],
-                    "Group": "CampA",
-                    "TelegramToken": "123:ABC",
-                },
-            }
+        monkeypatch.setattr(rkp_maco, "RATConfigParser", _FakeParser)
+        ext = rkp_maco.RKPMACO()
+        res = ext.run(io.BytesIO(b"MZ"), matches=[SimpleNamespace(rule="asyncrat")])
 
-    monkeypatch.setattr(rkp_maco, "RATConfigParser", _FakeParser)
-    ext = rkp_maco.RKPMACO()
-    res = ext.run(io.BytesIO(b"MZ"), matches=[SimpleNamespace(rule="asyncrat")])
+        # Must reuse MACO matches without re-running YARA inside RATConfigParser
+        assert seen_yara_args == [None]
+        assert res.family == "asyncrat"
+        assert res.mutex == []  # "null" filtered out
+        assert res.version == "1.2.3"
+        assert res.campaign_id == ["CampA"]
+        assert res.encryption[0].key == "deadbeef"
+        assert res.encryption[0].salt == "cafebabe"
+        assert res.other["TelegramToken"] == "123:ABC"
 
-    # Must reuse MACO matches without re-running YARA inside RATConfigParser
-    assert seen_yara_args == [None]
-    assert res.family == "asyncrat"
-    assert res.mutex == []  # "null" filtered out
-    assert res.version == "1.2.3"
-    assert res.campaign_id == ["CampA"]
-    assert res.encryption[0].key == "deadbeef"
-    assert res.encryption[0].salt == "cafebabe"
-    assert res.other["TelegramToken"] == "123:ABC"
+        tcp_ports = [c.server_port for c in res.tcp if getattr(c, "server_ip", None) is None and getattr(c, "server_domain", None) is None]
+        assert tcp_ports == [4444, 8080]
+        tcp_ips = [(c.server_ip, c.server_port) for c in res.tcp if getattr(c, "server_ip", None)]
+        assert tcp_ips == [("2001:db8::1", 4444), ("1.2.3.4", 5555)]
+        tcp_domains = [(c.server_domain, c.server_port) for c in res.tcp if getattr(c, "server_domain", None)]
+        assert tcp_domains == [("c2.example.com", 9000)]
+        assert any(getattr(h, "hostname", None) == "web.example.com" and h.port == 443 for h in res.http)
+        assert any(getattr(h, "uri", None) == "https://panel.example.com:8443/gate" for h in res.http)
 
-    tcp_ports = [c.server_port for c in res.tcp if getattr(c, "server_ip", None) is None and getattr(c, "server_domain", None) is None]
-    assert tcp_ports == [4444, 8080]
-    tcp_ips = [(c.server_ip, c.server_port) for c in res.tcp if getattr(c, "server_ip", None)]
-    assert tcp_ips == [("2001:db8::1", 4444), ("1.2.3.4", 5555)]
-    tcp_domains = [(c.server_domain, c.server_port) for c in res.tcp if getattr(c, "server_domain", None)]
-    assert tcp_domains == [("c2.example.com", 9000)]
-    assert any(getattr(h, "hostname", None) == "web.example.com" and h.port == 443 for h in res.http)
-    assert any(getattr(h, "uri", None) == "https://panel.example.com:8443/gate" for h in res.http)
-
-    # Also verify yara-x style Rule objects exposing .identifier (not .rule)
-    res_yarax = ext.run(io.BytesIO(b"MZ"), matches=[SimpleNamespace(identifier="xworm")])
-    assert res_yarax.family == "xworm"
+        # Also verify yara-x style Rule objects exposing .identifier (not .rule)
+        res_yarax = ext.run(io.BytesIO(b"MZ"), matches=[SimpleNamespace(identifier="xworm")])
+        assert res_yarax.family == "xworm"
+    finally:
+        sys.modules.pop(mod_name, None)
 
 
 def test_yara_x_compiled_rules_match_all_bundled_families(tmp_path) -> None:

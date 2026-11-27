@@ -189,9 +189,13 @@ class DotNetPEPayload:
         if field_idx < 0 or field_idx >= len(self._field_table.rows):
             raise ConfigParserException(f"Could not find Field for RVA {rva}")
         try:
-            return self._field_table.rows[field_idx].Name.value
+            name_obj = self._field_table.rows[field_idx].Name
+            name = name_obj.value if name_obj is not None else None
         except Exception as e:
             raise ConfigParserException(f"Could not find Field for RVA {rva}") from e
+        if not isinstance(name, str):
+            raise ConfigParserException(f"Could not decode Field name for RVA {rva}")
+        return name
 
     # Given a FieldDef token/RVA, returns its raw metadata signature bytes if available
     def field_signature_from_rva(self, rva: int) -> bytes | None:
@@ -245,16 +249,23 @@ class DotNetPEPayload:
                 method_size = 1 + (flags >> 2)
             elif flags & 3 == 3 and method_offset + 12 <= data_len:  # Fat format
                 flags16 = bytes_to_int(data[method_offset : method_offset + 2])
-                header_size = ((flags16 >> 12) & 0x0F) * 4 or 12
-                code_size = bytes_to_int(data[method_offset + 4 : method_offset + 8])
-                method_size = header_size + code_size
+                header_size = ((flags16 >> 12) & 0x0F) * 4
+                if header_size >= 12:
+                    code_size = bytes_to_int(data[method_offset + 4 : method_offset + 8])
+                    method_size = header_size + code_size
 
             if method_offset + method_size > data_len:
                 method_size = data_len - method_offset
 
+            name_obj = getattr(method, "Name", None)
+            method_name = (
+                name_obj.value
+                if name_obj is not None and isinstance(name_obj.value, str)
+                else ""
+            )
             method_objs.append(
                 DotNetPEMethod(
-                    method.Name.value,
+                    method_name,
                     method_offset,
                     method.Rva,
                     method_size,
@@ -346,7 +357,7 @@ class DotNetPEPayload:
                 f"No UserStrings heap present for RVA {hex(rva)}"
             )
         result = user_strings.get(rva & 0x00FFFFFF)
-        if result is None:
+        if result is None or not isinstance(result.value, str):
             raise ConfigParserException(
                 f"Could not find user string for RVA {hex(rva)}"
             )
@@ -389,37 +400,63 @@ class DotNetPEPayload:
             if not td_table or not prop_table:
                 return config
 
-            # Map 1-based TypeDef row index -> 1-based (start, end_exclusive) Property indices
+            # Map 1-based TypeDef row index -> 1-based Property row indices.
+            # In dnfile, PropertyMapRow.PropertyList is resolved via _struct_lists
+            # as list[MDTableIndex[PropertyRow]]; keep single-index range fallback
+            # for non-list wrappers.
             prop_map_table = getattr(self.dotnetpe.net.mdtables, "PropertyMap", None)
-            td_prop_ranges: dict[int, tuple[int, int]] = {}
+            td_prop_indices: dict[int, list[int]] = {}
             if prop_map_table:
                 pm_rows = prop_map_table.rows
                 for i, pm in enumerate(pm_rows):
-                    start_idx = pm.PropertyList.row_index
-                    end_idx = (
-                        pm_rows[i + 1].PropertyList.row_index
-                        if i + 1 < len(pm_rows)
-                        else len(prop_table.rows) + 1
-                    )
-                    td_prop_ranges[pm.Parent.row_index] = (start_idx, end_idx)
+                    parent = getattr(pm, "Parent", None)
+                    if parent is None:
+                        continue
+                    prop_list = getattr(pm, "PropertyList", None)
+                    if isinstance(prop_list, list):
+                        td_prop_indices[parent.row_index] = [
+                            p.row_index
+                            for p in prop_list
+                            if p is not None and 1 <= p.row_index <= len(prop_table.rows)
+                        ]
+                    elif prop_list is not None and hasattr(prop_list, "row_index"):
+                        start_idx = prop_list.row_index
+                        next_prop_list = (
+                            getattr(pm_rows[i + 1], "PropertyList", None)
+                            if i + 1 < len(pm_rows)
+                            else None
+                        )
+                        end_idx = (
+                            next_prop_list.row_index
+                            if next_prop_list is not None
+                            and hasattr(next_prop_list, "row_index")
+                            else len(prop_table.rows) + 1
+                        )
+                        td_prop_indices[parent.row_index] = list(
+                            range(max(1, start_idx), min(end_idx, len(prop_table.rows) + 1))
+                        )
 
             for td_idx, td in enumerate(td_table.rows, start=1):
                 if (
-                    td.TypeNamespace.value != typespacename
-                    or td.TypeName.value != typename
+                    getattr(td.TypeNamespace, "value", None) != typespacename
+                    or getattr(td.TypeName, "value", None) != typename
                 ):
                     continue
-                if td_prop_ranges:
-                    if td_idx not in td_prop_ranges:
+                if td_prop_indices:
+                    if td_idx not in td_prop_indices:
                         continue
-                    start_p, end_p = td_prop_ranges[td_idx]
-                    prop_indices = range(start_p, min(end_p, len(prop_table.rows) + 1))
+                    prop_indices: list[int] | range = td_prop_indices[td_idx]
                 else:
                     prop_indices = range(1, len(prop_table.rows) + 1)
 
                 for target_index in prop_indices:
+                    if not (1 <= target_index <= len(prop_table.rows)):
+                        continue
                     pd = prop_table.rows[target_index - 1]
-                    if pd.Name.value.startswith(
+                    prop_name = (
+                        pd.Name.value if getattr(pd, "Name", None) is not None else None
+                    )
+                    if not isinstance(prop_name, str) or prop_name.startswith(
                         (
                             "Boolean_",
                             "BorderStyle_",
@@ -439,11 +476,11 @@ class DotNetPEPayload:
                                 try:
                                     value = _decode_serstring_from_ca_blob(blob_data)
                                     if value is not None:
-                                        config.setdefault(pd.Name.value, value)
+                                        config.setdefault(prop_name, value)
                                 except UnicodeDecodeError:
                                     logger.debug(
                                         "Warning: Could not decode blob data for %s",
-                                        pd.Name.value,
+                                        prop_name,
                                     )
         except Exception as e:
             logger.debug("An error occurred in custom_attribute_from_type: %s", str(e))

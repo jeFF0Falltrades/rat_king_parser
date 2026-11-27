@@ -60,29 +60,32 @@ def decode_bytes(byte_str: bytes | str) -> str:
     try:
         if b"\x00" in byte_str:
             # Distinguish genuine UTF-16LE (even length, predominantly zero high
-            # bytes for BMP/ASCII text) from null-terminated UTF-8 or random
+            # bytes for BMP/ASCII text) from null-padded UTF-8 or random
             # wrong-key ciphertext containing an accidental 0x00 byte.
+            utf8_candidate = byte_str.rstrip(b"\x00")
+            trailing_null_only = len(utf8_candidate) > 1 and b"\x00" not in utf8_candidate
             is_even = len(byte_str) >= 2 and len(byte_str) % 2 == 0
             odd_nulls = byte_str[1::2].count(0) if is_even else 0
-            single_trailing_null = (
-                len(byte_str) > 2
-                and byte_str.endswith(b"\x00")
-                and b"\x00" not in byte_str[:-1]
-            )
-            if is_even and not single_trailing_null and odd_nulls >= max(1, len(byte_str) // 4):
+            if (
+                is_even
+                and not trailing_null_only
+                and odd_nulls >= max(1, len(byte_str) // 4)
+            ):
                 result = byte_str.decode("utf-16le").rstrip("\x00")
                 if _has_invalid_control_chars(result):
                     raise ValueError("Decoded UTF-16LE contains control characters")
                 return result
             # Fall back to UTF-8 (stripping trailing null terminators)
-            utf8_candidate = byte_str.rstrip(b"\x00")
             if b"\x00" not in utf8_candidate:
                 result = utf8_candidate.decode("utf-8")
                 if _has_invalid_control_chars(result):
                     raise ValueError("Decoded UTF-8 contains control characters")
                 return result
             raise ValueError("Embedded null bytes in non-UTF-16LE buffer")
-        return byte_str.decode("utf-8")
+        result = byte_str.decode("utf-8")
+        if _has_invalid_control_chars(result):
+            raise ValueError("Decoded UTF-8 contains control characters")
+        return result
     except Exception as e:
         raise ConfigParserException(
             f"Error decoding bytes object to Unicode: {byte_str}"

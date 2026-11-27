@@ -156,7 +156,9 @@ def _extract_cil_il_bytes(method_body: bytes) -> bytes | None:
         return None
     if fmt == 3 and len(method_body) >= 12:  # Fat header
         flags16 = int.from_bytes(method_body[0:2], "little")
-        header_size = ((flags16 >> 12) & 0x0F) * 4 or 12
+        header_size = ((flags16 >> 12) & 0x0F) * 4
+        if header_size < 12:
+            return None
         code_size = int.from_bytes(method_body[4:8], "little")
         if header_size <= len(method_body) and header_size + code_size <= len(method_body):
             return method_body[header_size : header_size + code_size]
