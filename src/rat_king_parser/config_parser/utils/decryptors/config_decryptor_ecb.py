@@ -29,7 +29,6 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-from base64 import b64decode
 from hashlib import md5
 from logging import getLogger
 from re import DOTALL, compile, search
@@ -39,8 +38,13 @@ from Cryptodome.Util.Padding import unpad
 
 from ...config_parser_exception import ConfigParserException
 from ..data_utils import bytes_to_int, decode_bytes
+from ..dotnet_constants import MDT_STRING
 from ..dotnetpe_payload import DotNetPEPayload
-from .config_decryptor import ConfigDecryptor, IncompatibleDecryptorException
+from .config_decryptor import (
+    ConfigDecryptor,
+    IncompatibleDecryptorException,
+    strict_b64decode,
+)
 
 logger = getLogger(__name__)
 
@@ -62,23 +66,43 @@ class ConfigDecryptorECB(ConfigDecryptor):
 
         self.is_AES = search(self._IS_AES, self._payload.data)
         self.is_3DES = search(self._IS_3DES, self._payload.data)
+        if not self.is_AES and not self.is_3DES:
+            raise IncompatibleDecryptorException(
+                "Neither AES nor 3DES ECB pattern detected"
+            )
         try:
             self._key_rva = self._get_key_rva()
         except Exception as e:
-            raise IncompatibleDecryptorException(e)
+            raise IncompatibleDecryptorException(e) from e
+
+    def reset_per_config_state(self) -> None:
+        self.key = None
+
+    def _build_cipher(self):
+        try:
+            if self.is_AES:
+                return AES.new(self.key, mode=AES.MODE_ECB), AES.block_size
+            if self.is_3DES:
+                adjusted_key = DES3.adjust_key_parity(self.key)
+                return DES3.new(adjusted_key, mode=DES3.MODE_ECB), DES3.block_size
+        except Exception as e:
+            raise ConfigParserException(
+                f"Error initializing ECB cipher with key {self.key.hex()}: {e}"
+            ) from e
+        raise ConfigParserException("Neither AES nor 3DES mode selected")
 
     # Given ciphertext, creates a Cipher object with the AES/3DES key and decrypts
     # the ciphertext
-    def _decrypt(self, ciphertext: bytes) -> bytes:
-        if self.is_AES:
-            cipher = AES.new(self.key, mode=AES.MODE_ECB)
-            block_size = AES.block_size
-        elif self.is_3DES:
-            cipher = DES3.new(self.key, mode=DES3.MODE_ECB)
-            block_size = DES3.block_size
+    def _decrypt(self, ciphertext: bytes, cipher=None, block_size: int | None = None) -> bytes:
+        if cipher is None or block_size is None:
+            cipher, block_size = self._build_cipher()
+
+        if len(ciphertext) == 0 or len(ciphertext) % block_size != 0:
+            raise ConfigParserException(
+                f"Invalid ECB ciphertext length {len(ciphertext)} (block size {block_size})"
+            )
 
         try:
-            unpadded_text = ""
             padded_text = cipher.decrypt(ciphertext)
             try:
                 # Attempt to unpad first
@@ -90,9 +114,9 @@ class ConfigDecryptorECB(ConfigDecryptor):
         except Exception as e:
             raise ConfigParserException(
                 f"Error decrypting ciphertext {ciphertext} with key {self.key.hex()}: {e}"
-            )
+            ) from e
 
-        logger.debug(f"Decryption result: {unpadded_text}")
+        logger.debug("Decryption result: %r", unpadded_text)
         return unpadded_text
 
     # Decrypts encrypted config values with the provided cipher data
@@ -102,44 +126,59 @@ class ConfigDecryptorECB(ConfigDecryptor):
         logger.debug("Decrypting encrypted strings...")
         if self.key is None:
             try:
-                raw_key_field = self._payload.field_name_from_rva(self._key_rva)
-                self.key = self._derive_key(encrypted_strings[raw_key_field])
+                if (self._key_rva & 0xFF000000) == MDT_STRING:
+                    raw_key_str = self._payload.user_string_from_rva(self._key_rva)
+                else:
+                    raw_key_field = self._payload.field_name_from_rva(self._key_rva)
+                    raw_key_str = encrypted_strings[raw_key_field]
+                self.key = self._derive_key(raw_key_str)
             except Exception as e:
-                raise ConfigParserException(f"Failed to derive AES/3DES key: {e}")
+                raise ConfigParserException(f"Failed to derive AES/3DES key: {e}") from e
+
+        cipher, block_size = self._build_cipher()
 
         decrypted_config_strings = {}
+        successfully_decrypted_count = 0
         for k, v in encrypted_strings.items():
             # Leave empty strings as they are
             if len(v) == 0:
-                logger.debug(f"Key: {k}, Value: {v}")
+                logger.debug("Key: %s, Value: %s", k, v)
                 decrypted_config_strings[k] = v
                 continue
 
-            # Check if base64-encoded string
-            b64_exception = False
-            try:
-                decoded_val = b64decode(v)
-            except Exception:
-                b64_exception = True
-            # If it was not base64-encoded, leave the value as it is
-            if b64_exception:
-                logger.debug(f"Key: {k}, Value: {v}")
+            # Strictly check if base64-encoded string and block-aligned
+            decoded_val = strict_b64decode(v)
+            if (
+                decoded_val is None
+                or len(decoded_val) == 0
+                or len(decoded_val) % block_size != 0
+            ):
+                logger.debug("Key: %s, Value: %s", k, v)
                 decrypted_config_strings[k] = v
                 continue
 
             ciphertext = decoded_val
             result, last_exc = None, None
             try:
-                result = decode_bytes(self._decrypt(ciphertext))
+                result = decode_bytes(
+                    self._decrypt(ciphertext, cipher=cipher, block_size=block_size)
+                )
             except ConfigParserException as e:
                 last_exc = e
 
             if result is None:
-                logger.debug(f"Decryption failed for item {v}: {last_exc}")
+                logger.debug("Decryption failed for item %s: %s", v, last_exc)
                 result = v
+            else:
+                successfully_decrypted_count += 1
 
-            logger.debug(f"Key: {k}, Value: {result}")
+            logger.debug("Key: %s, Value: %s", k, result)
             decrypted_config_strings[k] = result
+
+        if successfully_decrypted_count == 0:
+            raise ConfigParserException(
+                "No strings could be decrypted with the derived AES/3DES ECB key"
+            )
 
         logger.debug("Successfully decrypted strings")
         return decrypted_config_strings
@@ -154,7 +193,7 @@ class ConfigDecryptorECB(ConfigDecryptor):
         # AES key is a 32-byte value made up of the MD5 hash overlaying itself,
         # tailed with one null byte
         key = md5_digest[:15] + md5_digest[:16] + b"\x00" if self.is_AES else md5_digest
-        logger.debug(f"Key derived: {key}")
+        logger.debug("Key derived: %s", key.hex())
         return key
 
     # Extracts the AES/3DES key RVA from the payload
@@ -167,5 +206,5 @@ class ConfigDecryptorECB(ConfigDecryptor):
             raise ConfigParserException("Could not find AES/3DES key pattern")
 
         key_rva = bytes_to_int(key_hit.groups()[0])
-        logger.debug(f"AES/3DES key RVA: {hex(key_rva)}")
+        logger.debug("AES/3DES key RVA: %s", hex(key_rva))
         return key_rva

@@ -125,6 +125,10 @@ KNOWN_CONFIG_FIELD_NAMES = set(
     ]
 )
 
+KNOWN_CONFIG_FIELD_NAMES_NORMALIZED = frozenset(
+    name.replace("_", "") for name in KNOWN_CONFIG_FIELD_NAMES
+)
+
 
 class ConfigDecryptorPlaintext(ConfigDecryptor):
     # Minimum threshold for matching Field names

@@ -33,15 +33,16 @@ from .config_decryptor_random_hardcoded import ConfigDecryptorRandomHardcoded
 from .config_decryptor_rijndael import ConfigDecryptorRijndael
 
 __all__ = [
-    ConfigDecryptor,
-    IncompatibleDecryptorException,
-    ConfigDecryptorAESWithIV,
-    ConfigDecryptorAESWithIV_pbkdf,
-    ConfigDecryptorRijndael,
-    ConfigDecryptorECB,
-    ConfigDecryptorDecryptXOR,
-    ConfigDecryptorRandomHardcoded,
-    ConfigDecryptorPlaintext,
+    "ConfigDecryptor",
+    "IncompatibleDecryptorException",
+    "ConfigDecryptorAESWithIV",
+    "ConfigDecryptorAESWithIV_pbkdf",
+    "ConfigDecryptorRijndael",
+    "ConfigDecryptorECB",
+    "ConfigDecryptorDecryptXOR",
+    "ConfigDecryptorRandomHardcoded",
+    "ConfigDecryptorPlaintext",
+    "SUPPORTED_DECRYPTORS",
 ]
 
 # ConfigDecryptorPlaintext should always be the last fallthrough case

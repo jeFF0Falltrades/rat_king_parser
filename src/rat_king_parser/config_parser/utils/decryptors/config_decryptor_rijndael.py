@@ -30,17 +30,20 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 import logging
-from base64 import b64decode
 from hashlib import md5
 from re import DOTALL, compile, search
 
 from Cryptodome.Cipher import AES
-from Cryptodome.Util.Padding import pad, unpad
+from Cryptodome.Util.Padding import unpad
 
 from ...config_parser_exception import ConfigParserException
 from ..data_utils import bytes_to_int, decode_bytes
 from ..dotnetpe_payload import DotNetPEPayload
-from .config_decryptor import ConfigDecryptor, IncompatibleDecryptorException
+from .config_decryptor import (
+    ConfigDecryptor,
+    IncompatibleDecryptorException,
+    strict_b64decode,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,32 +72,47 @@ class ConfigDecryptorRijndael(ConfigDecryptor):
     def __init__(self, payload: DotNetPEPayload) -> None:
         super().__init__(payload)
         self.mode = AES.MODE_CBC
+        self._is_simple_md5 = bool(search(self._SIMPLE_MD5, self._payload.data))
         try:
             self._key_rva = self._get_key_rva()
         except Exception as e:
             logger.debug("Incompatible Decryptor")
-            raise IncompatibleDecryptorException(e)
+            raise IncompatibleDecryptorException(e) from e
+
+    def reset_per_config_state(self) -> None:
+        self.key = None
 
     # Given ciphertext, creates a Cipher object with the AES key and decrypts
     # the ciphertext
-    def _decrypt(self, ciphertext: bytes) -> bytes:
-        unpadded_text = ""
-        cipher = AES.new(self.key, mode=self.mode)
+    def _decrypt(self, ciphertext: bytes, ecb_cipher=None) -> bytes:
         block_size = AES.block_size
-        try:
+        if self.mode == AES.MODE_CBC:
+            if len(ciphertext) < 2 * block_size or len(ciphertext) % block_size != 0:
+                raise ConfigParserException("Invalid CBC ciphertext length")
+            # First 16 bytes carry the IV; decrypt remaining blocks directly
+            iv, ct = ciphertext[:block_size], ciphertext[block_size:]
+            cipher = AES.new(self.key, mode=AES.MODE_CBC, iv=iv)
+            padded_text = cipher.decrypt(ct)
+        elif self.mode == AES.MODE_CFB:
+            if len(ciphertext) <= block_size:
+                raise ConfigParserException("Invalid CFB ciphertext length")
+            iv, ct = ciphertext[:block_size], ciphertext[block_size:]
+            cipher = AES.new(self.key, mode=AES.MODE_CFB, iv=iv, segment_size=128)
+            padded_text = cipher.decrypt(ct)
+        elif self.mode == AES.MODE_ECB:
+            if len(ciphertext) < block_size or len(ciphertext) % block_size != 0:
+                raise ConfigParserException("Invalid ECB ciphertext length")
+            cipher = ecb_cipher or AES.new(self.key, mode=AES.MODE_ECB)
             padded_text = cipher.decrypt(ciphertext)
-            if self.mode == AES.MODE_CBC:
-                # Remove the first 16 bytes of the decrypted text as they are the IV
-                padded_text = padded_text[16:]
-        except ValueError:
-            padded_text = cipher.decrypt(pad(ciphertext, block_size))
+        else:
+            raise ConfigParserException(f"Unsupported AES mode: {self.mode}")
+
         try:
             unpadded_text = unpad(padded_text, block_size)
         except ValueError as e:
-            # Might be not padded
             logger.debug("error unpadding: %s", e)
-            return None
-        logger.debug(f"Decryption result: {unpadded_text}")
+            raise ConfigParserException(f"Error unpadding ciphertext: {e}") from e
+        logger.debug("Decryption result: %r", unpadded_text)
         return unpadded_text
 
     # Decrypts encrypted config values with the provided cipher data
@@ -117,62 +135,71 @@ class ConfigDecryptorRijndael(ConfigDecryptor):
                             key = encrypted_strings[raw_key_field]
                             self.key = self._derive_key(key)
                             break
-
             except Exception as e:
-                raise ConfigParserException(f"Failed to derive AES key: {e}")
+                raise ConfigParserException(f"Failed to derive AES key: {e}") from e
+
+        if not self.key:
+            raise ConfigParserException("Failed to derive AES key: key field not found")
+
+        ecb_cipher = (
+            AES.new(self.key, mode=AES.MODE_ECB) if self.mode == AES.MODE_ECB else None
+        )
 
         decrypted_config_strings = {}
+        successfully_decrypted_count = 0
         for k, v in encrypted_strings.items():
             # Leave empty strings as they are
             if len(v) == 0:
-                logger.debug(f"Key: {k}, Value: {v}")
+                logger.debug("Key: %s, Value: %s", k, v)
                 decrypted_config_strings[k] = v
                 continue
 
-            # Check if base64-encoded string
-            b64_exception = False
-            try:
-                decoded_val = b64decode(v)
-            except Exception:
-                b64_exception = True
-            # If it was not base64-encoded, leave the value as it is
-            if b64_exception:
-                logger.debug(f"Key: {k}, Value: {v}")
+            # Strictly check if base64-encoded string
+            decoded_val = strict_b64decode(v)
+            if decoded_val is None:
+                logger.debug("Key: %s, Value: %s", k, v)
                 decrypted_config_strings[k] = v
                 continue
 
             ciphertext = decoded_val
             result, last_exc = None, None
             try:
-                result = decode_bytes(self._decrypt(ciphertext))
+                result = decode_bytes(self._decrypt(ciphertext, ecb_cipher=ecb_cipher))
             except ConfigParserException as e:
                 last_exc = e
 
             if result is None:
-                logger.debug(f"Decryption failed for item {v}: {last_exc}")
+                logger.debug("Decryption failed for item %s: %s", v, last_exc)
                 result = v
+            else:
+                successfully_decrypted_count += 1
 
-            logger.debug(f"Key: {k}, Value: {result}")
+            logger.debug("Key: %s, Value: %s", k, result)
             decrypted_config_strings[k] = result
+
+        if successfully_decrypted_count == 0:
+            raise ConfigParserException(
+                "No strings could be decrypted with the derived Rijndael key"
+            )
 
         logger.debug("Successfully decrypted strings")
         return decrypted_config_strings
 
-    # Given the raw bytes that will become the key value, derives the AES/3DES key
+    # Given the raw bytes that will become the key value, derives the AES key
     def _derive_key(self, key_unhashed: str) -> bytes:
         # Generate the MD5 hash
         md5_hash = md5()
         md5_hash.update(key_unhashed.encode("utf-8"))
         key = md5_hash.digest()
 
-        if search(self._SIMPLE_MD5, self._payload.data):
+        if self._is_simple_md5:
             # check if simple md5
             logger.debug("Simple MD5 detected")
             key = key[:15] + key[:16] + b"\x00"
         logger.debug("Key derived: %s, from key: %s", key.hex(), key_unhashed)
         return key
 
-    # Extracts the AES/3DES key RVA from the payload
+    # Extracts the AES key RVA from the payload
     def _get_key_rva(self) -> int:
         logger.debug("Extracting AES key value...")
         key_hit = None
@@ -184,11 +211,13 @@ class ConfigDecryptorRijndael(ConfigDecryptor):
             raise ConfigParserException("Could not find AES key pattern")
 
         # check if AES mode is different from CBC:
-        _AES_MODE = search(self._AES_MODE, self._payload.data)
-        if _AES_MODE:
-            self.mode = self._ALGO_MAP[_AES_MODE.groups()[0]]
-            logger.debug(f"AES mode: {self.mode}")
+        aes_mode_hit = search(self._AES_MODE, self._payload.data)
+        if aes_mode_hit:
+            mapped_mode = self._ALGO_MAP.get(aes_mode_hit.groups()[0])
+            if mapped_mode is not None:
+                self.mode = mapped_mode
+                logger.debug("AES mode: %s", self.mode)
 
         key_rva = bytes_to_int(key_hit.groups()[0])
-        logger.debug(f"AES key RVA: {hex(key_rva)}")
+        logger.debug("AES key RVA: %s", hex(key_rva))
         return key_rva
