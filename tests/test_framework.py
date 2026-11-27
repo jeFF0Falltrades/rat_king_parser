@@ -1107,13 +1107,22 @@ def test_rkp_maco_wrapper_reuses_matches_and_validates_network_values(
     assert res_yarax.family == "xworm"
 
 
-def test_yara_x_compiled_rules_match_all_bundled_families() -> None:
+def test_yara_x_compiled_rules_match_all_bundled_families(tmp_path) -> None:
+    from pathlib import Path
+
     import yara_x
 
-    from rat_king_parser.yara_utils import YARA_PATH, YARC_PATH
+    from rat_king_parser.yara_utils import YARA_PATH, YARC_PATH, recompile
 
-    rules_src = yara_x.compile(open(YARA_PATH, encoding="utf-8").read())
-    with open(YARC_PATH, "rb") as fp:
+    rules_src = yara_x.compile(Path(YARA_PATH).read_text(encoding="utf-8"))
+    # Production loader transparently falls back to rules.yar if bundled rules.yarc
+    # was serialized by a different yara-x format version.
+    rules_loaded = rkp.load_yara(YARC_PATH)
+
+    # Also verify serialize -> deserialize round-trip with the active yara-x version
+    local_yarc = tmp_path / "rules.yarc"
+    recompile(YARA_PATH, str(local_yarc))
+    with open(local_yarc, "rb") as fp:
         rules_bin = yara_x.Rules.deserialize_from(fp)
 
     patt_config_10 = b"\x72AAA\x70\x80AAA\x04" * 10
@@ -1140,8 +1149,10 @@ def test_yara_x_compiled_rules_match_all_bundled_families() -> None:
 
     for expected_family, blob in family_blobs.items():
         src_hits = [r.identifier for r in rules_src.scan(blob).matching_rules]
+        loaded_hits = [r.identifier for r in rules_loaded.scan(blob).matching_rules]
         bin_hits = [r.identifier for r in rules_bin.scan(blob).matching_rules]
         assert expected_family in src_hits
+        assert expected_family in loaded_hits
         assert expected_family in bin_hits
         assert _make_bare_payload(blob)._match_yara(rules_bin) == expected_family
 
