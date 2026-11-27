@@ -31,34 +31,70 @@ from ..config_parser_exception import ConfigParserException
 
 
 # Converts a bytes object to an int object using the specified byte order
-def bytes_to_int(data: bytes, order: str = "little") -> int:
+def bytes_to_int(
+    data: bytes, order: str = "little", signed: bool = False
+) -> int:
     try:
-        return int.from_bytes(data, byteorder=order)
-    except Exception:
-        raise ConfigParserException(f"Error parsing int from value: {data}")
+        return int.from_bytes(data, byteorder=order, signed=signed)
+    except Exception as e:
+        raise ConfigParserException(f"Error parsing int from value: {data}") from e
+
+
+def _has_invalid_control_chars(text: str) -> bool:
+    for ch in text:
+        code = ord(ch)
+        if (code < 0x20 and ch not in ("\t", "\n", "\r")) or 0x7F <= code <= 0x9F:
+            return True
+    return False
 
 
 # Decodes a bytes object to a Unicode string, using UTF-16LE for byte values
 # with null bytes still embedded in them, and UTF-8 for all other values
 def decode_bytes(byte_str: bytes | str) -> str:
     if isinstance(byte_str, str):
-        return byte_str.strip()
-    result = None
-    try:
-        if b"\x00" in byte_str:
-            result = byte_str.decode("utf-16le")
-        else:
-            result = byte_str.decode("utf-8")
-    except Exception:
+        return byte_str
+    if not isinstance(byte_str, (bytes, bytearray)):
         raise ConfigParserException(
             f"Error decoding bytes object to Unicode: {byte_str}"
         )
-    return result
+    try:
+        if b"\x00" in byte_str:
+            # Distinguish genuine UTF-16LE (even length, predominantly zero high
+            # bytes for BMP/ASCII text) from null-padded UTF-8 or random
+            # wrong-key ciphertext containing an accidental 0x00 byte.
+            utf8_candidate = byte_str.rstrip(b"\x00")
+            trailing_null_only = len(utf8_candidate) > 1 and b"\x00" not in utf8_candidate
+            is_even = len(byte_str) >= 2 and len(byte_str) % 2 == 0
+            odd_nulls = byte_str[1::2].count(0) if is_even else 0
+            if (
+                is_even
+                and not trailing_null_only
+                and odd_nulls >= max(1, len(byte_str) // 4)
+            ):
+                result = byte_str.decode("utf-16le").rstrip("\x00")
+                if _has_invalid_control_chars(result):
+                    raise ValueError("Decoded UTF-16LE contains control characters")
+                return result
+            # Fall back to UTF-8 (stripping trailing null terminators)
+            if b"\x00" not in utf8_candidate:
+                result = utf8_candidate.decode("utf-8")
+                if _has_invalid_control_chars(result):
+                    raise ValueError("Decoded UTF-8 contains control characters")
+                return result
+            raise ValueError("Embedded null bytes in non-UTF-16LE buffer")
+        result = byte_str.decode("utf-8")
+        if _has_invalid_control_chars(result):
+            raise ValueError("Decoded UTF-8 contains control characters")
+        return result
+    except Exception as e:
+        raise ConfigParserException(
+            f"Error decoding bytes object to Unicode: {byte_str}"
+        ) from e
 
 
 # Converts an int to a bytes object, with the specified length and order
 def int_to_bytes(value: int, length: int = 4, order: str = "little") -> bytes:
     try:
         return value.to_bytes(length, order)
-    except Exception:
-        raise ConfigParserException(f"Error parsing bytes from value: {value}")
+    except Exception as e:
+        raise ConfigParserException(f"Error parsing bytes from value: {value}") from e

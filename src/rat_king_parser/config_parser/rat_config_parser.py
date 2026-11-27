@@ -32,7 +32,7 @@ from os.path import isfile
 from re import DOTALL, compile, search
 from typing import Any, Tuple
 
-from yara import Rules
+from yara_x import Rules
 
 from .config_parser_exception import ConfigParserException
 from .utils import config_item
@@ -42,7 +42,9 @@ from .utils.decryptors import (
     ConfigDecryptor,
     IncompatibleDecryptorException,
 )
-from .utils.decryptors.config_decryptor_plaintext import KNOWN_CONFIG_FIELD_NAMES
+from .utils.decryptors.config_decryptor_plaintext import (
+    KNOWN_CONFIG_FIELD_NAMES_NORMALIZED,
+)
 from .utils.dotnetpe_payload import DotNetPEPayload
 
 logger = getLogger(__name__)
@@ -61,8 +63,8 @@ class RATConfigParser:
     def __init__(
         self,
         file_path: str = "",
-        yara_rule: Rules = None,
-        data: bytes = None,
+        yara_rule: Rules | None = None,
+        data: bytes | None = None,
         remap_config: bool = False,
         preserve_obfuscated_keys: bool = False,
     ) -> None:
@@ -74,19 +76,18 @@ class RATConfigParser:
             "salt": "",
             "config": {},
         }
+        self.error: str | None = None
         self.remap_config = remap_config
         self.preserve_obfuscated_keys = preserve_obfuscated_keys
         self._dnpp: DotNetPEPayload | None = None
         self._decryptor: ConfigDecryptor | None = None
+        # Binary-level decryptor cache so metadata regexes run once per payload
+        self._decryptor_cache: dict[type[ConfigDecryptor], ConfigDecryptor] = {}
+        self._incompatible_decryptors: set[type[ConfigDecryptor]] = set()
         try:
             if data is None and not isfile(file_path):
                 raise ConfigParserException("File not found")
-            # Filled in _decrypt_and_decode_config()
-            self._incompatible_decryptors: list[Any] = []
-            try:
-                self._dnpp = DotNetPEPayload(file_path, yara_rule, data)
-            except Exception as e:
-                raise e
+            self._dnpp = DotNetPEPayload(file_path, yara_rule, data)
             self.report["sha256"] = self._dnpp.sha256
             self.report["yara_possible_family"] = self._dnpp.yara_match
 
@@ -105,42 +106,94 @@ class RATConfigParser:
                 else "None"
             )
         except Exception as e:
-            self.report["config"] = f"Exception encountered for {file_path}: {e}"
+            self.error = f"Exception encountered for {file_path}: {e}"
+            self.report["config"] = self.error
 
-    # Decrypts/decodes values from an encrypted config and returns the
-    # decrypted/decoded config
-    def _decrypt_and_decode_config(
-        self, encrypted_config: bytes, min_config_len: int
-    ) -> dict[str, Any]:
-        decoded_config = {}
-        config_fields_map = {}
+    # Extracts raw config items (without running decryption) once per method body
+    def _extract_raw_config_items(
+        self, encrypted_config: bytes
+    ) -> tuple[list[tuple[config_item.ConfigItem, dict[str, Any]]], dict[int, str], int]:
+        parsed_buckets = config_item.parse_config_items(
+            encrypted_config,
+            field_sig_lookup=self._dnpp.field_signature_from_rva,
+        )
+        extracted: list[tuple[config_item.ConfigItem, dict[str, Any]]] = []
+        config_fields_map: dict[int, str] = {}
+        raw_field_names: set[str] = set()
 
-        for item_class in config_item.SUPPORTED_CONFIG_ITEMS:
-            item = item_class()
-            item_data = {}
-            # Translate config Field RVAs to Field names
-            for k, v in item.parse_from(encrypted_config).items():
-                field_name = self._dnpp.field_name_from_rva(k)
-                config_fields_map[k] = field_name
-                item_data[field_name] = v
-            if len(item_data) > 0:
+        for item, raw_entries in parsed_buckets:
+            if not raw_entries:
+                continue
+            item_data: dict[str, Any] = {}
+            for k, v in raw_entries.items():
+                try:
+                    field_name = self._dnpp.field_name_from_rva(k)
+                except ConfigParserException as e:
+                    logger.debug(
+                        "Skipping invalid Field RVA %s in method body: %s",
+                        hex(k),
+                        e,
+                    )
+                    continue
                 if isinstance(item, config_item.EncryptedStringConfigItem):
-                    # Translate config value RVAs to string values
-                    for k in item_data:
-                        item_data[k] = self._dnpp.user_string_from_rva(item_data[k])
-                    item_data = self._attempt_decryption(item_data)
-
+                    try:
+                        v = self._dnpp.user_string_from_rva(v)
+                    except ConfigParserException as e:
+                        logger.debug(
+                            "Skipping invalid UserString RVA %s for field %s: %s",
+                            hex(v),
+                            field_name,
+                            e,
+                        )
+                        continue
                 elif isinstance(item, config_item.ByteArrayConfigItem):
-                    for k in item_data:
-                        arr_size, arr_rva = item_data[k]
-                        item_data[k] = self._dnpp.byte_array_from_size_and_rva(
+                    arr_size, arr_rva = v
+                    try:
+                        v = self._dnpp.byte_array_from_size_and_rva(
                             arr_size, arr_rva
                         ).hex()
+                    except ConfigParserException as e:
+                        logger.debug(
+                            "Skipping invalid ByteArray for field %s: %s",
+                            field_name,
+                            e,
+                        )
+                        continue
+                config_fields_map[k] = field_name
+                item_data[field_name] = v
+                raw_field_names.add(field_name)
+            if item_data:
+                extracted.append((item, item_data))
 
-                decoded_config.update(item_data)
+        return extracted, config_fields_map, len(raw_field_names)
+
+    # Decrypts/decodes values from pre-extracted raw config items
+    def _decode_extracted_config(
+        self,
+        extracted: list[tuple[config_item.ConfigItem, dict[str, Any]]],
+        config_fields_map: dict[int, str],
+        raw_count: int,
+        min_config_len: int,
+    ) -> dict[str, Any]:
+        # Fast-reject before running expensive decryptors (allow +1 for
+        # decryptors that append a dynamic field such as hardcoded_hosts or
+        # xor_decoded_strings).
+        has_url_host = any("UrlHost" in item_data for _, item_data in extracted)
+        if raw_count + 1 < min_config_len and not has_url_host:
+            raise ConfigParserException(
+                f"Minimum threshold of config items not met: {raw_count}/{min_config_len}"
+            )
+
+        decoded_config: dict[str, Any] = {}
+        self._decryptor = None
+        for item, item_data in extracted:
+            if isinstance(item, config_item.EncryptedStringConfigItem):
+                item_data = self._attempt_decryption(item_data)
+            decoded_config.update(item_data)
 
         # UrlHost is a marker of a special case until this can be standardized
         if len(decoded_config) < min_config_len and "UrlHost" not in decoded_config:
+            self._decryptor = None
             raise ConfigParserException(
                 f"Minimum threshold of config items not met: {len(decoded_config)}/{min_config_len}"
             )
@@ -148,75 +201,118 @@ class RATConfigParser:
             return self._remap_config(decoded_config, config_fields_map)
         return decoded_config
 
+    # Decrypts/decodes values from an encrypted config and returns the
+    # decrypted/decoded config
+    def _decrypt_and_decode_config(
+        self, encrypted_config: bytes, min_config_len: int
+    ) -> dict[str, Any]:
+        extracted, config_fields_map, raw_count = self._extract_raw_config_items(
+            encrypted_config
+        )
+        return self._decode_extracted_config(
+            extracted, config_fields_map, raw_count, min_config_len
+        )
+
     def _attempt_decryption(self, item_data: dict[str, Any]) -> dict[str, Any]:
-        # Attempt to decrypt encrypted values
-        for decryptor in SUPPORTED_DECRYPTORS:
-            if decryptor in self._incompatible_decryptors:
+        # Always evaluate decryptors in priority order without leaking state
+        # from any previous failed .cctor candidate.
+        self._decryptor = None
+        for decryptor_cls in SUPPORTED_DECRYPTORS:
+            if decryptor_cls in self._incompatible_decryptors:
                 continue
 
-            if self._decryptor is None:
-                # Try to instantiate the selected decryptor
-                # Add to incompatible list and move on upon failure
+            decryptor_instance = self._decryptor_cache.get(decryptor_cls)
+            if decryptor_instance is None:
+                # Try to instantiate the selected decryptor once per payload;
+                # mark incompatible on failure so we never re-scan the binary.
                 try:
-                    self._decryptor = decryptor(self._dnpp)
+                    decryptor_instance = decryptor_cls(self._dnpp)
                 except IncompatibleDecryptorException as ide:
-                    logger.debug(f"Decryptor incompatible {decryptor} : {ide}")
-                    self._incompatible_decryptors.append(decryptor)
+                    logger.debug(
+                        "Decryptor incompatible %s : %s", decryptor_cls, ide
+                    )
+                    self._incompatible_decryptors.add(decryptor_cls)
                     continue
+                self._decryptor_cache[decryptor_cls] = decryptor_instance
+            else:
+                decryptor_instance.reset_per_config_state()
+
             try:
-                # Try to decrypt the encrypted strings
-                # Continue to next compatible decryptor on failure
-                return self._decryptor.decrypt_encrypted_strings(item_data)
+                # Try to decrypt the encrypted strings; continue to next
+                # compatible decryptor on failure
+                decrypted = decryptor_instance.decrypt_encrypted_strings(item_data)
+                self._decryptor = decryptor_instance
+                return decrypted
             except Exception as e:
-                logger.debug(f"Decryption failed with decryptor {decryptor} : {e}")
-                self._decryptor = None
+                logger.debug(
+                    "Decryption failed with decryptor %s : %s", decryptor_cls, e
+                )
 
         # If we exit the loop without returning, no decryptor succeeded
         raise ConfigParserException("All decryptors failed")
 
+    @staticmethod
+    def _merge_remapped_value(existing_val: Any, value: Any) -> Any:
+        if isinstance(existing_val, list):
+            if isinstance(value, list):
+                return existing_val + value
+            if value not in ("", None):
+                return [*existing_val, value]
+            return existing_val
+
+        if isinstance(existing_val, str):
+            if not value:
+                return existing_val
+            new_val = ",".join(map(str, value)) if isinstance(value, list) else str(value)
+            if not existing_val:
+                return new_val
+            return f"{existing_val},{new_val}"
+
+        # Preserve non-str/non-list collisions (e.g. int + str/list) as a list
+        if value in ("", None, []):
+            return existing_val
+        if isinstance(value, list):
+            return [existing_val, *value]
+        return [existing_val, value]
+
     def _remap_config(
         self, decoded_config: dict[str, Any], config_fields_map: dict[int, str]
     ) -> dict[str, Any]:
-        remapped_config = {}
-        normalized_fields = []
+        remapped_config: dict[str, Any] = {}
+        processed_keys: set[str] = set()
+
         for k in sorted(config_fields_map.keys()):
             key_name = config_fields_map[k]
+            if key_name in processed_keys or key_name not in decoded_config:
+                continue
+            processed_keys.add(key_name)
             value = decoded_config[key_name]
 
-            # Run your normalization (e.g. converting HostsFE -> Hosts)
+            # Run normalization (e.g. converting HostsFE -> Hosts)
             key_normalized, value = check_key_n_value(key_name, value)
-
-            if key_normalized != key_name:
-                normalized_fields.append(key_name)
 
             # --- LOGIC TO APPEND INSTEAD OF OVERWRITE ---
             if key_normalized in remapped_config:
-                existing_val = remapped_config[key_normalized]
-
-                # Case 1: Values are Strings (e.g. "1.2.3.4:80")
-                if isinstance(existing_val, str) and value:
-                    # Append with a comma separator
-                    new_val = ",".join(map(str, value)) if isinstance(value, list) else value
-                    remapped_config[key_normalized] = f"{existing_val},{new_val}"
-
-                # Case 2: Values are Lists (e.g. ["1.2.3.4:80"])
-                elif isinstance(existing_val, list):
-                    # If the new value is also a list, extend; otherwise append
-                    if isinstance(value, list):
-                        remapped_config[key_normalized] = existing_val + value
-                    else:
-                        remapped_config[key_normalized].append(value)
+                remapped_config[key_normalized] = self._merge_remapped_value(
+                    remapped_config[key_normalized], value
+                )
             else:
                 # Key does not exist yet, create it
                 remapped_config[key_normalized] = value
-        # Ensure config items added by decryptors dynamically are preserved
-        remapped_config.update(
-            {
-                key: decoded_config[key]
-                for key in decoded_config
-                if key not in remapped_config and key not in normalized_fields
-            }
-        )
+
+        # Ensure config items added by decryptors dynamically (e.g. hardcoded_hosts,
+        # xor_decoded_strings) are also normalized and preserved
+        for key, val in decoded_config.items():
+            if key in processed_keys:
+                continue
+            key_normalized, norm_val = check_key_n_value(key, val)
+            if key_normalized in remapped_config:
+                remapped_config[key_normalized] = self._merge_remapped_value(
+                    remapped_config[key_normalized], norm_val
+                )
+            else:
+                remapped_config[key_normalized] = norm_val
+
         return remapped_config
 
     # Searches for the RAT configuration section, using the VerifyHash() marker
@@ -232,8 +328,8 @@ class RATConfigParser:
             try:
                 config_start, decrypted_config = self._get_config_cctor_brute_force()
             except Exception as e:
-                raise ConfigParserException(f"Could not identify config: {e}")
-        logger.debug(f"Config found at RVA {hex(config_start)}...")
+                raise ConfigParserException(f"Could not identify config: {e}") from e
+        logger.debug("Config found at RVA %s...", hex(config_start))
         if not self.preserve_obfuscated_keys and self._is_likely_obfuscated_config(
             decrypted_config
         ):
@@ -256,40 +352,61 @@ class RATConfigParser:
         if len(candidates) == 0:
             raise ConfigParserException("No .cctor method could be found")
 
-        # For each .cctor method, map its RVA and body (in raw bytes)
-        candidate_cctor_data = {
-            method.rva: self._dnpp.method_body_from_method(method)
-            for method in candidates
-        }
-
-        config_start, decrypted_config = None, None
-        # Start at our ceiling value for number of config items
-        min_config_len = self._MIN_CONFIG_LEN_CEILING
-
-        while decrypted_config is None and min_config_len >= self._MIN_CONFIG_LEN_FLOOR:
-            for method_rva, method_body in candidate_cctor_data.items():
-                logger.debug(
-                    f"Attempting brute force at .cctor method at {hex(method_rva)}"
-                )
-                try:
-                    config_start, decrypted_config = (
-                        method_rva,
-                        self._decrypt_and_decode_config(method_body, min_config_len),
-                    )
-                    break
-                except Exception as e:
-                    logger.debug(
-                        f"Brute force failed for method at {hex(method_rva)}: {e}"
-                    )
-                    continue
-            # Reduce the minimum config length until we reach our floor
-            min_config_len -= 1
-
-        if decrypted_config is None:
-            raise ConfigParserException(
-                "No valid configuration could be parsed from any .cctor methods"
+        # Pre-extract raw config items once per .cctor method and bucket by
+        # raw item count (highest priority first) so each .cctor is parsed and
+        # decrypted at most once instead of repeating across min_config_len.
+        extracted_candidates: list[
+            tuple[
+                int,
+                list[tuple[config_item.ConfigItem, dict[str, Any]]],
+                dict[int, str],
+                int,
+                bool,
+            ]
+        ] = []
+        for method in candidates:
+            method_body = self._dnpp.method_body_from_method(method)
+            extracted, fields_map, raw_count = self._extract_raw_config_items(
+                method_body
             )
-        return config_start, decrypted_config
+            has_url_host = any("UrlHost" in item_data for _, item_data in extracted)
+            if raw_count + 1 < self._MIN_CONFIG_LEN_FLOOR and not has_url_host:
+                continue
+            extracted_candidates.append(
+                (method.rva, extracted, fields_map, raw_count, has_url_host)
+            )
+
+        # Preserve original priority: >= CEILING first, then descending down to
+        # FLOOR, preserving original .cctor order within each bucket.
+        def _priority_bucket(entry: tuple) -> int:
+            raw_count, has_url_host = entry[3], entry[4]
+            if has_url_host or raw_count >= self._MIN_CONFIG_LEN_CEILING:
+                return self._MIN_CONFIG_LEN_CEILING
+            return raw_count
+
+        extracted_candidates.sort(key=_priority_bucket, reverse=True)
+
+        for method_rva, extracted, fields_map, raw_count, _ in extracted_candidates:
+            logger.debug(
+                "Attempting brute force at .cctor method at %s", hex(method_rva)
+            )
+            try:
+                decrypted_config = self._decode_extracted_config(
+                    extracted,
+                    fields_map,
+                    raw_count,
+                    self._MIN_CONFIG_LEN_FLOOR,
+                )
+                return method_rva, decrypted_config
+            except Exception as e:
+                logger.debug(
+                    "Brute force failed for method at %s: %s", hex(method_rva), e
+                )
+                continue
+
+        raise ConfigParserException(
+            "No valid configuration could be parsed from any .cctor methods"
+        )
 
     # Attempts to retrieve the config via looking for a config section preceded
     # by the VerifyHash() method typically found in a Settings module,
@@ -306,23 +423,19 @@ class RATConfigParser:
             verify_hash_hit.start(), 1
         )
         encrypted_config = self._dnpp.method_body_from_method(config_method)
-        min_config_len = self._MIN_CONFIG_LEN_CEILING
-        while True:
-            try:
-                decrypted_config = self._decrypt_and_decode_config(
-                    encrypted_config, min_config_len
-                )
-                return config_method.rva, decrypted_config
-            except Exception as e:
-                # Reduce the minimum config length until we reach our floor
-                if min_config_len < self._MIN_CONFIG_LEN_FLOOR:
-                    raise e
-                min_config_len -= 1
+        decrypted_config = self._decrypt_and_decode_config(
+            encrypted_config, self._MIN_CONFIG_LEN_FLOOR
+        )
+        return config_method.rva, decrypted_config
 
     def _is_likely_obfuscated_config(self, config: dict[str, Any]) -> bool:
+        # Order-independent check: any non-ASCII key signals obfuscation;
+        # otherwise check whether any key matches a known config field name
+        # (including underscore-stripped normalized forms).
+        has_known_key = False
         for key in config.keys():
             if not key.isascii():
                 return True
-            if key in KNOWN_CONFIG_FIELD_NAMES:
-                return False
-        return True
+            if key.replace("_", "") in KNOWN_CONFIG_FIELD_NAMES_NORMALIZED:
+                has_known_key = True
+        return not has_known_key

@@ -48,7 +48,8 @@ class ConfigDecryptorRandomHardcoded(ConfigDecryptor):
 
     # Pattern to find the Method that retrieves a random domain
     _PATTERN_RANDOM_DOMAIN = compile(
-        rb"(?:\x73.{3}\x0a){2}\x25.+?\x0a\x06(?:\x6f.{3}\x0a){2}\x0b", flags=DOTALL
+        rb"(?:\x73.{3}\x0a){2}\x25.{1,8192}?\x0a\x06(?:\x6f.{3}\x0a){2}\x0b",
+        flags=DOTALL,
     )
 
     def __init__(self, payload: DotNetPEPayload) -> None:
@@ -56,7 +57,7 @@ class ConfigDecryptorRandomHardcoded(ConfigDecryptor):
         try:
             self._random_domain_method = self._get_random_domain_method()
         except Exception as e:
-            raise IncompatibleDecryptorException(e)
+            raise IncompatibleDecryptorException(e) from e
 
     # Returns a combined config containing config fields + hardcoded hosts
     def decrypt_encrypted_strings(
@@ -83,10 +84,12 @@ class ConfigDecryptorRandomHardcoded(ConfigDecryptor):
                 if extracted_hosts != ".":
                     hardcoded_hosts.append(extracted_hosts)
             except Exception as e:
-                logger.error(f"Error translating hardcoded host at {hex(rva)}: {e}")
+                logger.error(
+                    "Error translating hardcoded host at %s: %s", rva.hex(), e
+                )
                 continue
 
-        logger.debug(f"Hardcoded hosts found: {hardcoded_hosts}")
+        logger.debug("Hardcoded hosts found: %s", hardcoded_hosts)
         return hardcoded_hosts
 
     # Retrieves the Method that randomly selects from a list of embedded hosts
@@ -103,6 +106,7 @@ class ConfigDecryptorRandomHardcoded(ConfigDecryptor):
         )
 
         logger.debug(
-            f"Random domain generator found at offset {hex(random_domain_method.offset)}"
+            "Random domain generator found at offset %s",
+            hex(random_domain_method.offset),
         )
         return random_domain_method

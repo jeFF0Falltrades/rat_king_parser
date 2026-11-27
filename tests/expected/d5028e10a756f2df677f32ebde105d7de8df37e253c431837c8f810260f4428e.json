@@ -9,7 +9,7 @@
     "mutex_string": "Xeno_rat_nd89dsedwqdswdqwdwqdqwdqwdwqdwqdqwdqwdwqdwqd12d",
     "startup_name": "nothingset"
   },
-  "key": "650f47cdd14eaef8c529f2a03fa7744c",
+  "key": "None",
   "salt": "None",
   "sha256": "d5028e10a756f2df677f32ebde105d7de8df37e253c431837c8f810260f4428e",
   "yara_possible_family": "xenorat"

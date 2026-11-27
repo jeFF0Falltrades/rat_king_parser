@@ -25,20 +25,24 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+import re
 import typing
 from enum import Enum, auto
 from logging import getLogger
 from pathlib import Path
-from re import search
 
 import validators
+import yara_x
 from maco import extractor, model
-from yara import Match, load
+from yara_x import Rules
 
 from rat_king_parser.config_parser import RATConfigParser
 from rat_king_parser.yara_utils import YARA_PATH, YARC_PATH
 
 logger = getLogger(__name__)
+
+_NETWORK_SPLIT_DELIMS = re.compile(r"[,;]")
+_BRACKETED_IPV6_PORT = re.compile(r"^\[([^\]]+)\]:([0-9]+)$")
 
 
 # Helper Enum for known plaintext config value types
@@ -56,6 +60,19 @@ MAP_KNOWN_PLAINTEXT_CONFIG_KEYS = {
 }
 
 
+def _parse_valid_port(raw_port: typing.Any) -> typing.Optional[int]:
+    if isinstance(raw_port, bool):
+        return None
+    if isinstance(raw_port, int):
+        return raw_port if 1 <= raw_port <= 65535 else None
+    if isinstance(raw_port, str):
+        stripped = raw_port.strip()
+        if stripped.isascii() and stripped.isdigit():
+            port = int(stripped)
+            return port if 1 <= port <= 65535 else None
+    return None
+
+
 class RKPMACO(extractor.Extractor):
     """A MACO-compatible wrapper of jeFF0Falltrades' RAT King Parser"""
 
@@ -63,37 +80,86 @@ class RKPMACO(extractor.Extractor):
     author = "jeFF0Falltrades"
     last_modified = "2024-10-18"
     sharing = "TLP:WHITE"
-    yara_rule = (Path(__file__).parent / YARA_PATH).read_text()
+    yara_rule = Path(YARA_PATH).read_text(encoding="utf-8")
+    _cached_yara_rules: typing.Optional[Rules] = None
+
+    @classmethod
+    def _get_compiled_yara_rules(cls) -> Rules:
+        if cls._cached_yara_rules is None:
+            try:
+                with open(YARC_PATH, "rb") as fp:
+                    cls._cached_yara_rules = yara_x.Rules.deserialize_from(fp)
+            except Exception:
+                cls._cached_yara_rules = yara_x.compile(cls.yara_rule)
+        return cls._cached_yara_rules
 
     def run(
-        self, stream: typing.BinaryIO, matches: typing.List[Match]
+        self, stream: typing.BinaryIO, matches: typing.List[typing.Any]
     ) -> typing.Optional[model.ExtractorModel]:
-        report = RATConfigParser(
-            yara_rule=load(str(Path(__file__).parent / YARC_PATH)),
+        # Reuse MACO's existing YARA matches instead of scanning twice when available
+        yara_rule_to_run = None if matches else self._get_compiled_yara_rules()
+        parser = RATConfigParser(
+            yara_rule=yara_rule_to_run,
             data=stream.read(),
             remap_config=True,
-        ).report
+        )
+        report = parser.report
 
         # Check if exception occurred within RKP parsing
-        if isinstance(report["config"], str) and report["config"].startswith(
-            "Exception"
+        if parser.error or (
+            isinstance(report["config"], str)
+            and report["config"].startswith("Exception")
         ):
-            logger.error(report["config"])
-            return
+            logger.error("%s", report["config"])
+            return None
 
-        # Attempt to extract malware family from YARA match
-        extracted_family = report["yara_possible_family"]
+        # Attempt to extract malware family from MACO YARA match or RKP YARA match
+        if matches:
+            first_match = matches[0]
+            extracted_family = str(
+                getattr(first_match, "rule", None)
+                or getattr(first_match, "identifier", None)
+                or first_match
+            )
+        else:
+            extracted_family = report["yara_possible_family"]
         rkp_model = model.ExtractorModel(
-            family=extracted_family if extracted_family != "No match" else "Unknown"
+            family=(
+                extracted_family
+                if extracted_family and extracted_family != "No match"
+                else "Unknown"
+            )
         )
         rkp_model.category.append(model.CategoryEnum.rat)
+
+        # Preserve encryption key/salt metadata when available
+        key_val = report.get("key")
+        salt_val = report.get("salt")
+        if (key_val and key_val != "None") or (salt_val and salt_val != "None"):
+            enc_kwargs: dict[str, typing.Any] = {}
+            if key_val and key_val != "None":
+                enc_kwargs["key"] = key_val
+            if salt_val and salt_val != "None":
+                enc_kwargs["salt"] = salt_val
+            if enc_kwargs and hasattr(rkp_model, "Encryption"):
+                try:
+                    rkp_model.encryption.append(rkp_model.Encryption(**enc_kwargs))
+                except Exception as e:
+                    logger.debug("Could not populate MACO encryption metadata: %s", e)
+
+        other_fields: dict[str, typing.Any] = {}
 
         for k, v in report["config"].items():
             # Check for known config keys
             if k in MAP_KNOWN_PLAINTEXT_CONFIG_KEYS:
                 match MAP_KNOWN_PLAINTEXT_CONFIG_KEYS[k]:
                     case ConfigValueTypes.MUTEX:
-                        rkp_model.mutex.append(v)
+                        if (
+                            isinstance(v, str)
+                            and v.strip()
+                            and v.strip().lower() not in ("null", "false")
+                        ):
+                            rkp_model.mutex.append(v)
                     # For ports found in their own config field, separate from
                     # their corresponding host, it is difficult to map them to
                     # the appropriate server_domain/server_ip
@@ -101,33 +167,47 @@ class RKPMACO(extractor.Extractor):
                     # Instead, these will show individually as "server_port"
                     # entries in the MACO config
                     case ConfigValueTypes.PORT:
-                        if isinstance(v, int):
-                            # Single port was extracted rather than a list
-                            rkp_model.tcp.append(rkp_model.Connection(server_port=v))
+                        if isinstance(v, list):
+                            for port_item in v:
+                                parsed_port = _parse_valid_port(port_item)
+                                if parsed_port is not None:
+                                    rkp_model.tcp.append(
+                                        rkp_model.Connection(server_port=parsed_port)
+                                    )
                         else:
-                            # Assume a list of ports was extracted
-                            rkp_model.tcp.extend(
-                                [
-                                    rkp_model.Connection(server_port=int(port))
-                                    for port in v
-                                    if str(port).isdigit()
-                                ]
-                            )
+                            parsed_port = _parse_valid_port(v)
+                            if parsed_port is not None:
+                                rkp_model.tcp.append(
+                                    rkp_model.Connection(server_port=parsed_port)
+                                )
                     case ConfigValueTypes.VERSION:
-                        rkp_model.version = v
+                        if isinstance(v, str) and v:
+                            rkp_model.version = v
+                continue
+
+            if k == "Group" and isinstance(v, str) and v:
+                if hasattr(rkp_model, "campaign_id"):
+                    rkp_model.campaign_id.append(v)
+                else:
+                    other_fields[k] = v
                 continue
 
             # If v is a list, it contains other config values to be parsed
             if isinstance(v, list):
-                possible_network_values = v
-            # Otherwise, parse the value directly from v, accounting for the
-            # `;` delimiter
+                possible_network_values = [item for item in v if isinstance(item, str)]
+            # Otherwise, parse the value directly from v, accounting for
+            # `,` and `;` delimiters
             elif isinstance(v, str):
-                possible_network_values = v.split(";")
+                possible_network_values = _NETWORK_SPLIT_DELIMS.split(v)
             else:
+                other_fields[k] = v
                 continue
 
-            for network_value in possible_network_values:
+            matched_network = False
+            for raw_network_value in possible_network_values:
+                network_value = raw_network_value.strip()
+                if not network_value:
+                    continue
                 network_value, port = self._split_network_value(network_value)
 
                 # Check for IP value
@@ -141,6 +221,7 @@ class RKPMACO(extractor.Extractor):
                     validators.ipv6(network_value), validators.ValidationError
                 ):
                     self._add_tcp_ip(rkp_model, network_value, port)
+                    matched_network = True
                     continue
 
                 # Check for domain value
@@ -148,7 +229,7 @@ class RKPMACO(extractor.Extractor):
                     validators.domain(network_value, consider_tld=True),
                     validators.ValidationError,
                 ):
-                    if port == 80 or port == 443:
+                    if port in (80, 443):
                         protocol = "http" if port == 80 else "https"
                         rkp_model.http.append(
                             rkp_model.Http(
@@ -166,6 +247,7 @@ class RKPMACO(extractor.Extractor):
                                 usage="c2",
                             )
                         )
+                    matched_network = True
                     continue
 
                 # Check for URL value
@@ -173,7 +255,7 @@ class RKPMACO(extractor.Extractor):
                     validators.url(network_value), validators.ValidationError
                 ):
                     protocol = (
-                        network_value.split(":")[0]
+                        network_value.split(":", 1)[0]
                         if network_value.startswith("http")
                         else None
                     )
@@ -184,7 +266,14 @@ class RKPMACO(extractor.Extractor):
                             usage="c2",
                         )
                     )
+                    matched_network = True
                     continue
+
+            if not matched_network and v not in ("", None, []):
+                other_fields[k] = v
+
+        if other_fields and hasattr(rkp_model, "other"):
+            rkp_model.other.update(other_fields)
 
         return rkp_model
 
@@ -201,11 +290,21 @@ class RKPMACO(extractor.Extractor):
     def _split_network_value(
         self, network_value: str
     ) -> typing.Tuple[str, typing.Optional[int]]:
-        match = search(r":([0-9]+)$", network_value)
-        if match is not None:
-            try:
-                val, port = network_value.split(":")
-                return val, int(port)
-            except ValueError:
-                pass
-        return network_value, None  #
+        # Leave URLs intact for validators.url()
+        if "://" in network_value:
+            return network_value, None
+        # Handle bracketed IPv6 with port, e.g. [2001:db8::1]:4444
+        ipv6_match = _BRACKETED_IPV6_PORT.match(network_value)
+        if ipv6_match is not None:
+            host, raw_port = ipv6_match.groups()
+            port = _parse_valid_port(raw_port)
+            if port is not None:
+                return host, port
+            return host, None
+        # Handle IPv4/domain with single trailing :port
+        if network_value.count(":") == 1:
+            host, raw_port = network_value.rsplit(":", 1)
+            port = _parse_valid_port(raw_port)
+            if port is not None:
+                return host, port
+        return network_value, None

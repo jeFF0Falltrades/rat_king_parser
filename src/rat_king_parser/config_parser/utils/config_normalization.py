@@ -28,16 +28,27 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+import re
 from typing import Any
 
 normalized_keys = {
-    "Hosts": ("HOSTS", "Hosts", "HostsFE", "ServerIp", "hardcodedhosts", "PasteUrl"),
+    "Hosts": (
+        "HOSTS",
+        "Hosts",
+        "HostsFE",
+        "ServerIp",
+        "hardcodedhosts",
+        "PasteUrl",
+        "UrlHost",
+    ),
     "Ports": ("Port", "Ports", "ServerPort"),
     "Mutex": ("MTX", "MUTEX", "Mutex", "mutex_string"),
     "Version": ("VERSION", "Version"),
     "Key": ("Key", "key", "EncryptionKey", "ENCRYPTIONKEY"),
     "Group": ("Group", "Groub", "GroupTag", "TAG"),
 }
+
+_SPLIT_DELIMS = re.compile(r"[,;]")
 
 # Strip underscores from aliases at build time so the lookup is consistent
 # with the underscore-stripped input key (e.g. so "mutex_string" actually
@@ -58,9 +69,8 @@ def check_key_n_value(key: str, value: Any) -> tuple[str, Any]:
         key = _normalized_keys_map[key]
 
     if key in ("Hosts", "Ports") and isinstance(value, str):
-        if value not in ("null", "false"):
-            splitter = "," if "," in value else ";"
-            value = list(filter(None, value.split(splitter)))
+        if value.strip().lower() not in ("null", "false"):
+            value = [part.strip() for part in _SPLIT_DELIMS.split(value) if part.strip()]
         else:
             value = []
 

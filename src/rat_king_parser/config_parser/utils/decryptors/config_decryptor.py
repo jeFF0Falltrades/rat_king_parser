@@ -28,11 +28,28 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 from abc import ABC, abstractmethod
+from base64 import b64decode
 from logging import getLogger
 
 from ..dotnetpe_payload import DotNetPEPayload
 
 logger = getLogger(__name__)
+
+
+def strict_b64decode(value: str) -> bytes | None:
+    """Strictly decode a base64 string (allowing embedded CR/LF line breaks only).
+
+    Returns None if the input contains invalid base64 characters or padding.
+    """
+    if not value:
+        return None
+    cleaned = value.replace("\r", "").replace("\n", "")
+    if not cleaned:
+        return None
+    try:
+        return b64decode(cleaned, validate=True)
+    except Exception:
+        return None
 
 
 # Custom Exception to denote that a decryptor is incompatible with a payload
@@ -42,9 +59,13 @@ class IncompatibleDecryptorException(Exception):
 
 class ConfigDecryptor(ABC):
     def __init__(self, payload: DotNetPEPayload) -> None:
-        self.key: bytes | str = None
+        self.key: bytes | str | None = None
         self._payload = payload
-        self.salt: bytes = None
+        self.salt: bytes | None = None
+
+    def reset_per_config_state(self) -> None:
+        """Reset per-.cctor state while preserving binary-level metadata."""
+        return None
 
     # Abstract method to take in a map representing a configuration of config
     # Field names and values and return a decoded/decrypted configuration

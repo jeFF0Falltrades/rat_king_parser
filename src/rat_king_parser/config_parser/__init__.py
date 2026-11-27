@@ -25,4 +25,4 @@
 # SOFTWARE.
 from .rat_config_parser import RATConfigParser
 
-__all__ = [RATConfigParser]
+__all__ = ["RATConfigParser"]

@@ -48,7 +48,7 @@ class ConfigDecryptorDecryptXOR(ConfigDecryptor):
 
     # Pattern to detect usage of DecryptXOR Method
     _PATTERN_DECRYPT_XOR_BLOCK = compile(
-        rb"(\x2d.\x72.{3}\x70\x28.{3}\x06\x2a(?:\x02[\x16-\x1f].?\x33.\x72.{3}\x70\x28.{3}\x06\x2a){7,}.+?\x72.{3}\x70)",
+        rb"(\x2d.\x72.{3}\x70\x28.{3}\x06\x2a(?:\x02[\x16-\x1f].?\x33.\x72.{3}\x70\x28.{3}\x06\x2a){7,}.{1,65536}?\x72.{3}\x70)",
         flags=DOTALL,
     )
 
@@ -59,26 +59,45 @@ class ConfigDecryptorDecryptXOR(ConfigDecryptor):
         try:
             self._get_xor_metadata()
         except Exception as e:
-            raise IncompatibleDecryptorException(e)
+            raise IncompatibleDecryptorException(e) from e
 
     # Returns a list of decoded XOR-encoded strings found in the payload
     def _decode_encoded_strings(self) -> list[str]:
+        if not self.key:
+            raise ConfigParserException("Empty XOR key")
+        key = self.key
+        key_len = len(key)
         decoded_strings = []
 
         for string in self._xor_strings:
-            decoded = []
             # Do not modify unencoded strings
             if ":" not in string:
                 decoded_strings.append(string)
                 continue
 
-            # Split encoded string by ':' and run XOR decoding
-            arr, arr2 = (bytes.fromhex(arr) for arr in string.split(":"))
-            for idx, byte in enumerate(arr2):
-                decoded.append(byte ^ self.key[idx % len(self.key)] ^ arr[idx])
-            decoded_strings.append(decode_bytes(bytes(decoded)))
+            parts = string.split(":")
+            if len(parts) != 2:
+                decoded_strings.append(string)
+                continue
 
-        logger.debug(f"Decoded {len(decoded_strings)} strings")
+            # Split encoded string by ':' and run XOR decoding
+            try:
+                arr = bytes.fromhex(parts[0])
+                arr2 = bytes.fromhex(parts[1])
+            except ValueError:
+                decoded_strings.append(string)
+                continue
+
+            if len(arr) < len(arr2):
+                decoded_strings.append(string)
+                continue
+
+            decoded = bytes(
+                byte ^ key[idx % key_len] ^ arr[idx] for idx, byte in enumerate(arr2)
+            )
+            decoded_strings.append(decode_bytes(decoded))
+
+        logger.debug("Decoded %d strings", len(decoded_strings))
         return decoded_strings
 
     # Parses the config, adds decoded XOR strings, and returns the decoded
@@ -98,20 +117,21 @@ class ConfigDecryptorDecryptXOR(ConfigDecryptor):
         dxor_block = search(self._PATTERN_DECRYPT_XOR_BLOCK, self._payload.data)
         if dxor_block is None:
             raise ConfigParserException("Could not identify DecryptXOR block")
-        logger.debug(f"DecryptXOR block found at offset {hex(dxor_block.start())}")
+        logger.debug("DecryptXOR block found at offset %s", hex(dxor_block.start()))
 
         # Derive all XOR-encoded string references in the DecryptXOR block
         xor_string_rvas = findall(PATTERN_LDSTR_OP, dxor_block.groups()[0])
-        self._xor_strings = list(
-            filter(
-                None,
-                [
-                    self._payload.user_string_from_rva(bytes_to_int(rva))
-                    for rva in xor_string_rvas
-                ],
-            )
-        )
-        logger.debug(f"{len(self._xor_strings)} XOR strings found")
+        xor_strings = []
+        for rva in xor_string_rvas:
+            try:
+                val = self._payload.user_string_from_rva(bytes_to_int(rva))
+            except ConfigParserException as e:
+                logger.debug("Skipping invalid XOR string RVA %s: %s", rva.hex(), e)
+                continue
+            if val:
+                xor_strings.append(val)
+        self._xor_strings = xor_strings
+        logger.debug("%d XOR strings found", len(self._xor_strings))
 
         # Get the static constructor containing the XOR key
         xor_key_cctor = self._payload.method_from_instruction_offset(
@@ -123,6 +143,8 @@ class ConfigDecryptorDecryptXOR(ConfigDecryptor):
         xor_rva = search(PATTERN_LDSTR_OP, xor_key_cctor_body)
         if xor_rva is None:
             raise ConfigParserException("Could not identify XOR key RVA")
-        xor_rva = bytes_to_int(xor_rva.groups()[0])
-        self.key = bytes(self._payload.user_string_from_rva(xor_rva), encoding="utf-8")
-        logger.debug(f"XOR key found at {hex(xor_rva)} : {self.key}")
+        xor_rva_int = bytes_to_int(xor_rva.groups()[0])
+        self.key = bytes(
+            self._payload.user_string_from_rva(xor_rva_int), encoding="utf-8"
+        )
+        logger.debug("XOR key found at %s : %r", hex(xor_rva_int), self.key)

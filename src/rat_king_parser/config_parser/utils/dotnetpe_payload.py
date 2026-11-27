@@ -34,13 +34,16 @@ from hashlib import sha256
 from logging import getLogger
 
 from dnfile import dnPE
-from yara import Rules
+from pefile import DIRECTORY_ENTRY
+from yara_x import Rules
 
 from ..config_parser_exception import ConfigParserException
 from .data_utils import bytes_to_int
 from .dotnet_constants import MDT_FIELD_DEF, MDT_METHOD_DEF, MDT_STRING
 
 logger = getLogger(__name__)
+
+_CLR_DIRECTORY_ONLY = (DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR"],)
 
 
 # Helper class representing a single Method
@@ -53,9 +56,38 @@ class DotNetPEMethod:
     token: int
 
 
+def _decode_serstring_from_ca_blob(blob_data: bytes) -> str | None:
+    """Decode a single SerString fixed argument from an ECMA-335 CustomAttribute blob."""
+    if len(blob_data) < 3 or blob_data[:2] != b"\x01\x00":
+        return None
+    pos = 2
+    first = blob_data[pos]
+    if first == 0xFF:  # null string
+        return None
+    if (first & 0x80) == 0:
+        str_len = first
+        pos += 1
+    elif (first & 0xC0) == 0x80 and pos + 1 < len(blob_data):
+        str_len = ((first & 0x3F) << 8) | blob_data[pos + 1]
+        pos += 2
+    elif (first & 0xE0) == 0xC0 and pos + 3 < len(blob_data):
+        str_len = (
+            ((first & 0x1F) << 24)
+            | (blob_data[pos + 1] << 16)
+            | (blob_data[pos + 2] << 8)
+            | blob_data[pos + 3]
+        )
+        pos += 4
+    else:
+        return None
+    if pos + str_len > len(blob_data):
+        return None
+    return blob_data[pos : pos + str_len].decode("utf-8")
+
+
 class DotNetPEPayload:
     def __init__(
-        self, file_path: str, yara_rule: Rules = None, data: bytes = None
+        self, file_path: str, yara_rule: Rules | None = None, data: bytes | None = None
     ) -> None:
         self.file_path = file_path
         self.data = data
@@ -67,25 +99,41 @@ class DotNetPEPayload:
         sha256_obj.update(self.data)
         self.sha256 = sha256_obj.hexdigest()
 
-        self.dotnetpe: dnPE = None
+        self.dotnetpe: dnPE | None = None
         try:
-            if self.data:
-                self.dotnetpe = dnPE(data=self.data, clr_lazy_load=True)
+            if self.data is not None:
+                self.dotnetpe = dnPE(
+                    data=self.data, fast_load=True, clr_lazy_load=True
+                )
             else:
-                self.dotnetpe = dnPE(self.file_path, clr_lazy_load=True)
+                self.dotnetpe = dnPE(
+                    self.file_path, fast_load=True, clr_lazy_load=True
+                )
+            self.dotnetpe.parse_data_directories(directories=_CLR_DIRECTORY_ONLY)
             if not self.dotnetpe.net or not self.dotnetpe.net.mdtables:
-                raise ConfigParserException("Failed to load project as dotnet executable (missing Metadata)")
-        except Exception:
-            raise ConfigParserException("Failed to load project as dotnet executable")
+                raise ConfigParserException(
+                    "Failed to load project as dotnet executable (missing Metadata)"
+                )
+        except ConfigParserException:
+            raise
+        except Exception as e:
+            raise ConfigParserException(
+                "Failed to load project as dotnet executable"
+            ) from e
 
         self.yara_match = ""
         if yara_rule is not None:
             self.yara_match = self._match_yara(yara_rule)
 
+        # Cache Field metadata table for fast lookups
+        self._field_table = getattr(self.dotnetpe.net.mdtables, "Field", None)
+
         # Pre-sort Method table for efficient lookups
+        # Note: _generate_method_list() yields methods in monotonic token order,
+        # so _methods is already sorted by token without an extra sort pass.
         self._methods = self._generate_method_list()
         self._methods_by_offset = sorted(self._methods, key=lambda m: m.offset)
-        self._methods_by_token = sorted(self._methods, key=lambda m: m.token)
+        self._methods_by_token = self._methods
         self._offsets = [m.offset for m in self._methods_by_offset]
         self._tokens = [m.token for m in self._methods_by_token]
 
@@ -102,42 +150,71 @@ class DotNetPEPayload:
     def byte_array_from_size_and_rva(self, arr_size: int, arr_rva: int) -> bytes:
         arr_field_rva = self.fieldrva_from_rva(arr_rva)
         arr_offset = self.offset_from_rva(arr_field_rva)
-        return self.data[arr_offset: arr_offset + arr_size]
+        if arr_offset < 0 or arr_size < 0 or arr_offset + arr_size > len(self.data):
+            raise ConfigParserException(
+                f"Byte array out of bounds at offset {hex(arr_offset)} (size {arr_size})"
+            )
+        return self.data[arr_offset : arr_offset + arr_size]
 
     # Given an offset, and either a terminating offset or delimiter, extracts
     # the byte string
     def byte_string_from_offset(
         self, offset_start: int, offstart_end: int = -1, delimiter: bytes = b"\0"
     ) -> bytes:
-        if offstart_end != -1:
-            try:
-                return self.data[offset_start:offstart_end]
-            except Exception:
-                raise ConfigParserException(
-                    f"Could not extract string value from offset range [{hex(offset_start)}:{offstart_end}]"
-                )
-        try:
-            return self.data[offset_start:].partition(delimiter)[0]
-        except Exception:
+        if not isinstance(offset_start, int) or offset_start < 0 or offset_start > len(self.data):
             raise ConfigParserException(
-                f"Could not extract string value from offset {hex(offset_start)} with delimiter {delimiter}"
+                f"Could not extract string value from invalid offset {offset_start!r}"
             )
+        if offstart_end != -1:
+            if not isinstance(offstart_end, int) or offstart_end < offset_start:
+                raise ConfigParserException(
+                    f"Could not extract string value from offset range [{hex(offset_start)}:{offstart_end!r}]"
+                )
+            return self.data[offset_start:offstart_end]
+        try:
+            end = self.data.find(delimiter, offset_start)
+            return self.data[offset_start:end] if end != -1 else self.data[offset_start:]
+        except Exception as e:
+            raise ConfigParserException(
+                f"Could not extract string value from offset {hex(offset_start)} with delimiter {delimiter!r}"
+            ) from e
 
     # Given an RVA, derives the corresponding Field name
     def field_name_from_rva(self, rva: int) -> str:
-        try:
-            field_table = getattr(self.dotnetpe.net.mdtables, "Field", None)
-            if not field_table:
-                raise ConfigParserException(f"Could not find Field table for RVA {rva}")
-            return field_table.rows[
-                (rva ^ MDT_FIELD_DEF) - 1
-            ].Name.value
-        except Exception:
+        if not self._field_table:
+            raise ConfigParserException(f"Could not find Field table for RVA {rva}")
+        if (rva & 0xFF000000) != MDT_FIELD_DEF:
+            raise ConfigParserException(f"Invalid Field token for RVA {hex(rva)}")
+        field_idx = (rva & 0x00FFFFFF) - 1
+        if field_idx < 0 or field_idx >= len(self._field_table.rows):
             raise ConfigParserException(f"Could not find Field for RVA {rva}")
+        try:
+            name_obj = self._field_table.rows[field_idx].Name
+            name = name_obj.value if name_obj is not None else None
+        except Exception as e:
+            raise ConfigParserException(f"Could not find Field for RVA {rva}") from e
+        if not isinstance(name, str):
+            raise ConfigParserException(f"Could not decode Field name for RVA {rva}")
+        return name
+
+    # Given a FieldDef token/RVA, returns its raw metadata signature bytes if available
+    def field_signature_from_rva(self, rva: int) -> bytes | None:
+        if not self._field_table or (rva & 0xFF000000) != MDT_FIELD_DEF:
+            return None
+        field_idx = (rva & 0x00FFFFFF) - 1
+        if field_idx < 0 or field_idx >= len(self._field_table.rows):
+            return None
+        try:
+            sig = self._field_table.rows[field_idx].Signature
+            return sig.value if sig is not None else None
+        except Exception:
+            return None
 
     # Given an RVA, derives the corresponding FieldRVA value
     def fieldrva_from_rva(self, rva: int) -> int:
-        field_id = rva ^ MDT_FIELD_DEF
+        if (rva & 0xFF000000) != MDT_FIELD_DEF:
+            raise ConfigParserException(f"Invalid Field token for FieldRVA {hex(rva)}")
+        field_id = rva & 0x00FFFFFF
         if field_id in self._field_rva_map:
             return self._field_rva_map[field_id]
         raise ConfigParserException(f"Could not find FieldRVA for RVA {rva}")
@@ -152,45 +229,71 @@ class DotNetPEPayload:
         if not method_def_table:
             return method_objs
 
+        data = self.data
+        data_len = len(data)
         for idx, method in enumerate(method_def_table.rows):
-            method_offset = self.offset_from_rva(method.Rva)
+            # Skip abstract, P/Invoke, and runtime methods with no IL body
+            if not method.Rva:
+                continue
+            try:
+                method_offset = self.offset_from_rva(method.Rva)
+            except Exception:
+                continue
+            if method_offset < 0 or method_offset >= data_len:
+                continue
 
-            # Parse size from flags
-            flags = self.data[method_offset]
+            # Parse size from flags (ECMA-335 II.25.4.2 / II.25.4.3)
+            flags = data[method_offset]
             method_size = 0
-            if flags & 3 == 2:  # Tiny format
-                method_size = flags >> 2
-            elif flags & 3 == 3:  # Fat format (add 12-byte header)
-                method_size = 12 + bytes_to_int(
-                    self.data[method_offset + 4: method_offset + 8]
-                )
+            if flags & 3 == 2:  # Tiny format (1-byte header + 6-bit code size)
+                method_size = 1 + (flags >> 2)
+            elif flags & 3 == 3 and method_offset + 12 <= data_len:  # Fat format
+                flags16 = bytes_to_int(data[method_offset : method_offset + 2])
+                header_size = ((flags16 >> 12) & 0x0F) * 4
+                if header_size >= 12:
+                    code_size = bytes_to_int(data[method_offset + 4 : method_offset + 8])
+                    method_size = header_size + code_size
 
+            if method_offset + method_size > data_len:
+                method_size = data_len - method_offset
+
+            name_obj = getattr(method, "Name", None)
+            method_name = (
+                name_obj.value
+                if name_obj is not None and isinstance(name_obj.value, str)
+                else ""
+            )
             method_objs.append(
                 DotNetPEMethod(
-                    method.Name.value,
+                    method_name,
                     method_offset,
                     method.Rva,
                     method_size,
-                    (MDT_METHOD_DEF ^ idx) + 1,
+                    MDT_METHOD_DEF | (idx + 1),
                 )
             )
         return method_objs
 
     # Returns payload binary content
     def _get_file_data(self) -> bytes:
-        logger.debug(f"Reading contents from: {self.file_path}")
+        logger.debug("Reading contents from: %s", self.file_path)
         try:
             with open(self.file_path, "rb") as fp:
                 data = fp.read()
-        except Exception:
-            raise ConfigParserException(f"Error reading from path: {self.file_path}")
-        logger.debug(f"Successfully read {len(data)} bytes")
+        except Exception as e:
+            raise ConfigParserException(
+                f"Error reading from path: {self.file_path}"
+            ) from e
+        logger.debug("Successfully read %d bytes", len(data))
         return data
 
-    # Tests a given YARA rule object against the file content,
-    # returning the matching rule's name, or "No match"
+    # Tests a given YARA-X (or legacy yara-python) rule object against the file
+    # content, returning the matching rule's name, or "No match"
     def _match_yara(self, rule: Rules) -> str:
         try:
+            if hasattr(rule, "scan"):
+                matches = rule.scan(self.data).matching_rules
+                return str(matches[0].identifier) if matches else "No match"
             match = rule.match(data=self.data)
             return str(match[0]) if len(match) > 0 else "No match"
         except Exception as e:
@@ -213,16 +316,29 @@ class DotNetPEPayload:
         self, ins_offset: int, step: int = 0, by_token: bool = False
     ) -> DotNetPEMethod:
         idx = bisect_right(self._offsets, ins_offset) - 1
-        if idx >= 0:
+        while idx >= 0:
             method = self._methods_by_offset[idx]
             if method.offset <= ins_offset < method.offset + method.size:
                 if step == 0:
                     return method
-                return (
-                    self._methods_by_token[bisect_right(self._tokens, method.token) - 1 + step]
-                    if by_token
-                    else self._methods_by_offset[idx + step]
+                if by_token:
+                    token_idx = bisect_right(self._tokens, method.token) - 1 + step
+                    if 0 <= token_idx < len(self._methods_by_token):
+                        return self._methods_by_token[token_idx]
+                    raise ConfigParserException(
+                        f"Adjacent method out of bounds (token step {step}) for offset {hex(ins_offset)}"
+                    )
+                target_idx = idx + step
+                if 0 <= target_idx < len(self._methods_by_offset):
+                    return self._methods_by_offset[target_idx]
+                raise ConfigParserException(
+                    f"Adjacent method out of bounds (offset step {step}) for offset {hex(ins_offset)}"
                 )
+            # Only continue scanning backwards if preceding methods share the exact same offset
+            if idx > 0 and self._methods_by_offset[idx - 1].offset == method.offset:
+                idx -= 1
+            else:
+                break
         raise ConfigParserException(
             f"Could not find method from instruction offset {hex(ins_offset)}"
         )
@@ -233,8 +349,15 @@ class DotNetPEPayload:
 
     # Given an RVA, derives the corresponding User String
     def user_string_from_rva(self, rva: int) -> str:
-        result = self.dotnetpe.net.user_strings.get(rva ^ MDT_STRING)
-        if result is None:
+        if (rva & 0xFF000000) != MDT_STRING:
+            raise ConfigParserException(f"Invalid UserString token for RVA {hex(rva)}")
+        user_strings = getattr(self.dotnetpe.net, "user_strings", None)
+        if user_strings is None:
+            raise ConfigParserException(
+                f"No UserStrings heap present for RVA {hex(rva)}"
+            )
+        result = user_strings.get(rva & 0x00FFFFFF)
+        if result is None or not isinstance(result.value, str):
             raise ConfigParserException(
                 f"Could not find user string for RVA {hex(rva)}"
             )
@@ -261,57 +384,103 @@ class DotNetPEPayload:
         """
         config = {}
         try:
-            ca_map = {}
+            ca_map: dict[int, list] = {}
             ca_table = getattr(self.dotnetpe.net.mdtables, "CustomAttribute", None)
             if ca_table:
                 for ca in ca_table.rows:
-                    idx = ca.Parent.row_index
-                    if idx not in ca_map:
-                        ca_map[idx] = []
-                    ca_map[idx].append(ca)
+                    parent = getattr(ca, "Parent", None)
+                    parent_table = getattr(parent, "table", None)
+                    if parent_table is None or getattr(parent_table, "name", None) != "Property":
+                        continue
+                    idx = parent.row_index
+                    ca_map.setdefault(idx, []).append(ca)
 
             td_table = getattr(self.dotnetpe.net.mdtables, "TypeDef", None)
-            if not td_table:
+            prop_table = getattr(self.dotnetpe.net.mdtables, "Property", None)
+            if not td_table or not prop_table:
                 return config
 
-            for td in td_table.rows:
+            # Map 1-based TypeDef row index -> 1-based Property row indices.
+            # In dnfile, PropertyMapRow.PropertyList is resolved via _struct_lists
+            # as list[MDTableIndex[PropertyRow]]; keep single-index range fallback
+            # for non-list wrappers.
+            prop_map_table = getattr(self.dotnetpe.net.mdtables, "PropertyMap", None)
+            td_prop_indices: dict[int, list[int]] = {}
+            if prop_map_table:
+                pm_rows = prop_map_table.rows
+                for i, pm in enumerate(pm_rows):
+                    parent = getattr(pm, "Parent", None)
+                    if parent is None:
+                        continue
+                    prop_list = getattr(pm, "PropertyList", None)
+                    if isinstance(prop_list, list):
+                        td_prop_indices[parent.row_index] = [
+                            p.row_index
+                            for p in prop_list
+                            if p is not None and 1 <= p.row_index <= len(prop_table.rows)
+                        ]
+                    elif prop_list is not None and hasattr(prop_list, "row_index"):
+                        start_idx = prop_list.row_index
+                        next_prop_list = (
+                            getattr(pm_rows[i + 1], "PropertyList", None)
+                            if i + 1 < len(pm_rows)
+                            else None
+                        )
+                        end_idx = (
+                            next_prop_list.row_index
+                            if next_prop_list is not None
+                            and hasattr(next_prop_list, "row_index")
+                            else len(prop_table.rows) + 1
+                        )
+                        td_prop_indices[parent.row_index] = list(
+                            range(max(1, start_idx), min(end_idx, len(prop_table.rows) + 1))
+                        )
+
+            for td_idx, td in enumerate(td_table.rows, start=1):
                 if (
-                    td.TypeNamespace.value != typespacename
-                    and td.TypeName.value != typename
+                    getattr(td.TypeNamespace, "value", None) != typespacename
+                    or getattr(td.TypeName, "value", None) != typename
                 ):
                     continue
-                prop_table = getattr(self.dotnetpe.net.mdtables, "Property", None)
-                if not prop_table:
-                    continue
-                for pd_row_index, pd in enumerate(prop_table.rows):
-                    if pd.Name.value.startswith((
-                        "Boolean_",
-                        "BorderStyle_",
-                        "Color_",
-                        "Byte",
-                        "Int32_",
-                        "SizeF_",
-                        "String_",
-                    )):
+                if td_prop_indices:
+                    if td_idx not in td_prop_indices:
                         continue
-                    # CustomAttribute Parent index is 1-based
-                    target_index = pd_row_index + 1
+                    prop_indices: list[int] | range = td_prop_indices[td_idx]
+                else:
+                    prop_indices = range(1, len(prop_table.rows) + 1)
+
+                for target_index in prop_indices:
+                    if not (1 <= target_index <= len(prop_table.rows)):
+                        continue
+                    pd = prop_table.rows[target_index - 1]
+                    prop_name = (
+                        pd.Name.value if getattr(pd, "Name", None) is not None else None
+                    )
+                    if not isinstance(prop_name, str) or prop_name.startswith(
+                        (
+                            "Boolean_",
+                            "BorderStyle_",
+                            "Color_",
+                            "Byte",
+                            "Int32_",
+                            "SizeF_",
+                            "String_",
+                        )
+                    ):
+                        continue
                     if target_index in ca_map:
                         for ca in ca_map[target_index]:
                             # Extract the value from the CustomAttribute blob
                             blob_data = ca.Value.value
                             if blob_data and blob_data != b"\x01\x00\x00\x00":
-                                # Basic handling of the blob data. You might need to adjust this depending on the actual format.
-                                # In many cases, the value is stored as a UTF-8 string after a preamble.
                                 try:
-                                    # Skip preamble bytes (usually 2 bytes). 3rd byte is size of data
-                                    value_bytes = blob_data[3:]
-                                    value = value_bytes.decode("utf-8").rstrip("\x00")
-                                    config.setdefault(pd.Name.value, value)
+                                    value = _decode_serstring_from_ca_blob(blob_data)
+                                    if value is not None:
+                                        config.setdefault(prop_name, value)
                                 except UnicodeDecodeError:
                                     logger.debug(
                                         "Warning: Could not decode blob data for %s",
-                                        pd.Name.value,
+                                        prop_name,
                                     )
         except Exception as e:
             logger.debug("An error occurred in custom_attribute_from_type: %s", str(e))
