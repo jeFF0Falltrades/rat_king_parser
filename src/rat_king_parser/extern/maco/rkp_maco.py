@@ -32,9 +32,9 @@ from logging import getLogger
 from pathlib import Path
 
 import validators
+import yara_x
 from maco import extractor, model
-from yara import Match, Rules, load
-from yara import compile as yara_compile
+from yara_x import Rules
 
 from rat_king_parser.config_parser import RATConfigParser
 from rat_king_parser.yara_utils import YARA_PATH, YARC_PATH
@@ -87,13 +87,14 @@ class RKPMACO(extractor.Extractor):
     def _get_compiled_yara_rules(cls) -> Rules:
         if cls._cached_yara_rules is None:
             try:
-                cls._cached_yara_rules = load(YARC_PATH)
+                with open(YARC_PATH, "rb") as fp:
+                    cls._cached_yara_rules = yara_x.Rules.deserialize_from(fp)
             except Exception:
-                cls._cached_yara_rules = yara_compile(source=cls.yara_rule)
+                cls._cached_yara_rules = yara_x.compile(cls.yara_rule)
         return cls._cached_yara_rules
 
     def run(
-        self, stream: typing.BinaryIO, matches: typing.List[Match]
+        self, stream: typing.BinaryIO, matches: typing.List[typing.Any]
     ) -> typing.Optional[model.ExtractorModel]:
         # Reuse MACO's existing YARA matches instead of scanning twice when available
         yara_rule_to_run = None if matches else self._get_compiled_yara_rules()
@@ -114,7 +115,12 @@ class RKPMACO(extractor.Extractor):
 
         # Attempt to extract malware family from MACO YARA match or RKP YARA match
         if matches:
-            extracted_family = str(matches[0].rule)
+            first_match = matches[0]
+            extracted_family = str(
+                getattr(first_match, "rule", None)
+                or getattr(first_match, "identifier", None)
+                or first_match
+            )
         else:
             extracted_family = report["yara_possible_family"]
         rkp_model = model.ExtractorModel(
@@ -134,7 +140,7 @@ class RKPMACO(extractor.Extractor):
             if key_val and key_val != "None":
                 enc_kwargs["key"] = key_val
             if salt_val and salt_val != "None":
-                enc_kwargs["constants"] = [salt_val]
+                enc_kwargs["salt"] = salt_val
             if enc_kwargs and hasattr(rkp_model, "Encryption"):
                 try:
                     rkp_model.encryption.append(rkp_model.Encryption(**enc_kwargs))

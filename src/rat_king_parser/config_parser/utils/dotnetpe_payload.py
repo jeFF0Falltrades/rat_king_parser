@@ -35,7 +35,7 @@ from logging import getLogger
 
 from dnfile import dnPE
 from pefile import DIRECTORY_ENTRY
-from yara import Rules
+from yara_x import Rules
 
 from ..config_parser_exception import ConfigParserException
 from .data_utils import bytes_to_int
@@ -276,10 +276,13 @@ class DotNetPEPayload:
         logger.debug("Successfully read %d bytes", len(data))
         return data
 
-    # Tests a given YARA rule object against the file content,
-    # returning the matching rule's name, or "No match"
+    # Tests a given YARA-X (or legacy yara-python) rule object against the file
+    # content, returning the matching rule's name, or "No match"
     def _match_yara(self, rule: Rules) -> str:
         try:
+            if hasattr(rule, "scan"):
+                matches = rule.scan(self.data).matching_rules
+                return str(matches[0].identifier) if matches else "No match"
             match = rule.match(data=self.data)
             return str(match[0]) if len(match) > 0 else "No match"
         except Exception as e:

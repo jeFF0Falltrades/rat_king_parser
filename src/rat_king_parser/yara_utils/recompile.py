@@ -29,8 +29,9 @@
 # SOFTWARE.
 import os.path
 from argparse import ArgumentParser
+from pathlib import Path
 
-from yara import compile
+import yara_x
 
 YARA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rules.yar")
 YARC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rules.yarc")
@@ -38,8 +39,9 @@ YARC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rules.yarc
 
 # Compiles the YARA rules at the specified file path and saves them
 def recompile(input_path: str = YARA_PATH, output_path: str = YARC_PATH) -> None:
-    compiled_rule = compile(input_path)
-    compiled_rule.save(output_path)
+    compiled_rule = yara_x.compile(Path(input_path).read_text(encoding="utf-8"))
+    with open(output_path, "wb") as fp:
+        compiled_rule.serialize_into(fp)
 
 
 if __name__ == "__main__":

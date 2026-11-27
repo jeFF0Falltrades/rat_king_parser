@@ -941,15 +941,42 @@ def test_remap_config_and_obfuscation_check() -> None:
 
 def test_rkp_load_yara_fallback_and_dynamic_log_filter(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
 ) -> None:
-    from rat_king_parser.yara_utils import YARC_PATH
+    from rat_king_parser.yara_utils import YARA_PATH, YARC_PATH, recompile
 
-    def _boom(_path: str):
-        raise OSError("incompatible yarc")
+    # Round-trip yara-x compile -> serialize (.yarc) -> deserialize -> scan
+    out_yarc = tmp_path / "test_rules.yarc"
+    recompile(YARA_PATH, str(out_yarc))
+    loaded = rkp.load_yara(str(out_yarc))
+    assert loaded is not None
 
-    monkeypatch.setattr(rkp, "load", _boom)
+    # Direct .yar source loading
+    loaded_from_src = rkp.load_yara(YARA_PATH)
+    assert loaded_from_src is not None
+
+    # Fallback to bundled rules.yar when deserializing YARC_PATH fails
+    def _boom(_fp):
+        raise OSError("incompatible yara-x binary")
+
+    monkeypatch.setattr(rkp.yara_x.Rules, "deserialize_from", staticmethod(_boom))
     rules = rkp.load_yara(YARC_PATH)
     assert rules is not None
+
+    # Verify yara-x matching AND legacy yara-python .match() duck-typing
+    xenorat_blob = (
+        b"xeno rat XenoUpdateManager nothingset \x1f\x10\x8dAAAA\x0a"
+        + b"\x72AAA\x70\x80AAA\x04" * 6
+    )
+    payload_hit = _make_bare_payload(xenorat_blob)
+    assert payload_hit._match_yara(rules) == "xenorat"
+
+    payload_miss = _make_bare_payload(b"benign bytes")
+    assert payload_miss._match_yara(rules) == "No match"
+
+    legacy_rule = SimpleNamespace(match=lambda data: ["asyncrat"] if b"xeno" in data else [])
+    assert payload_hit._match_yara(legacy_rule) == "asyncrat"
+    assert payload_miss._match_yara(legacy_rule) == "No match"
 
     # Dynamic file_path logging filter updates across calls in the same worker
     rec1 = logging.LogRecord("test", logging.DEBUG, __file__, 1, "msg1", (), None)
@@ -1063,7 +1090,7 @@ def test_rkp_maco_wrapper_reuses_matches_and_validates_network_values(
     assert res.version == "1.2.3"
     assert res.campaign_id == ["CampA"]
     assert res.encryption[0].key == "deadbeef"
-    assert res.encryption[0].constants == ["cafebabe"]
+    assert res.encryption[0].salt == "cafebabe"
     assert res.other["TelegramToken"] == "123:ABC"
 
     tcp_ports = [c.server_port for c in res.tcp if getattr(c, "server_ip", None) is None and getattr(c, "server_domain", None) is None]
@@ -1074,3 +1101,47 @@ def test_rkp_maco_wrapper_reuses_matches_and_validates_network_values(
     assert tcp_domains == [("c2.example.com", 9000)]
     assert any(getattr(h, "hostname", None) == "web.example.com" and h.port == 443 for h in res.http)
     assert any(getattr(h, "uri", None) == "https://panel.example.com:8443/gate" for h in res.http)
+
+    # Also verify yara-x style Rule objects exposing .identifier (not .rule)
+    res_yarax = ext.run(io.BytesIO(b"MZ"), matches=[SimpleNamespace(identifier="xworm")])
+    assert res_yarax.family == "xworm"
+
+
+def test_yara_x_compiled_rules_match_all_bundled_families() -> None:
+    import yara_x
+
+    from rat_king_parser.yara_utils import YARA_PATH, YARC_PATH
+
+    rules_src = yara_x.compile(open(YARA_PATH, encoding="utf-8").read())
+    with open(YARC_PATH, "rb") as fp:
+        rules_bin = yara_x.Rules.deserialize_from(fp)
+
+    patt_config_10 = b"\x72AAA\x70\x80AAA\x04" * 10
+    patt_verify = b"\x7eAAA\x04\x6fAAA\x0a\x6fAAA\x0a\x74AAA\x01"
+    aes_key_base = b"\x7eAAA\x04\x73AAA\x06\x80"
+    aes_salt_base = bytes.fromhex("BFEB1E56FBCD973BB219")
+
+    family_blobs = {
+        "asyncrat": b"AsyncClient masterKey can not be null or empty "
+        + aes_key_base
+        + aes_salt_base
+        + patt_verify
+        + patt_config_10,
+        "dcrat": b"dcrat qwqdan save_Plugin " + aes_key_base + patt_config_10,
+        "quasarrat": b"Quasar. QuasarApplication ENABLELOGGER RECONNECTDELAY "
+        + patt_config_10,
+        "xenorat": b"xeno rat XenoUpdateManager nothingset \x1f\x10\x8dAAAA\x0a"
+        + patt_config_10,
+        "xworm": b"xworm Xwormmm XClient XLogger " + patt_config_10,
+        "venomrat": b"venomrat HVNC_REPLY_MESSAGE OfflineKeylog sending.... "
+        + aes_key_base
+        + patt_config_10,
+    }
+
+    for expected_family, blob in family_blobs.items():
+        src_hits = [r.identifier for r in rules_src.scan(blob).matching_rules]
+        bin_hits = [r.identifier for r in rules_bin.scan(blob).matching_rules]
+        assert expected_family in src_hits
+        assert expected_family in bin_hits
+        assert _make_bare_payload(blob)._match_yara(rules_bin) == expected_family
+

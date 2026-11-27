@@ -9,9 +9,35 @@ on:
       - master
 
 jobs:
-  malware-sample-tests:
-    name: Run malware sample tests
+  unit-tests:
+    name: Run unit tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13", "3.14"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: pip install ".[dev]"
+
+      - name: Run unit test suite
+        run: pytest tests/test_framework.py -v
+
+  malware-sample-tests:
+    name: Run malware sample tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13", "3.14"]
     # The job will run if:
     # 1. It's a push to master (e.g., a merge)
     # 2. It's a PR from the same repository (internal)
@@ -22,10 +48,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Setup Python
+      - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |

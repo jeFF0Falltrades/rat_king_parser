@@ -32,7 +32,7 @@ from os.path import isfile
 from re import DOTALL, compile, search
 from typing import Any, Tuple
 
-from yara import Rules
+from yara_x import Rules
 
 from .config_parser_exception import ConfigParserException
 from .utils import config_item

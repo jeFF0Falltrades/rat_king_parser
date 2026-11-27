@@ -32,10 +32,11 @@ from itertools import repeat
 from json import dumps
 from logging import DEBUG, WARNING, Filter, LogRecord, basicConfig, getLogger
 from os import cpu_count
+from pathlib import Path
 from typing import Any
 
-from yara import Rules, load
-from yara import compile as yara_compile
+import yara_x
+from yara_x import Rules
 
 from rat_king_parser._version import __version__
 from rat_king_parser.config_parser import RATConfigParser
@@ -71,21 +72,29 @@ def _configure_logging(debug: bool) -> None:
             handler.addFilter(_FilePathLogFilter())
 
 
-# Loads the compiled yara rules for known strains from the provided path,
+# Loads the compiled yara-x rules for known strains from the provided path,
 # falling back to compiling the bundled source rules if the bundled .yarc was
-# compiled with a different libyara version
+# serialized with a different yara-x version
 def load_yara(compiled_rule_path: str) -> Rules:
+    if compiled_rule_path.endswith((".yar", ".yara")):
+        try:
+            return yara_x.compile(Path(compiled_rule_path).read_text(encoding="utf-8"))
+        except Exception as e:
+            raise RuntimeError(
+                f"Error compiling yara rule source at {compiled_rule_path}"
+            ) from e
     try:
-        return load(compiled_rule_path)
+        with open(compiled_rule_path, "rb") as fp:
+            return yara_x.Rules.deserialize_from(fp)
     except Exception as e:
         if compiled_rule_path == YARC_PATH:
             try:
                 logger.debug(
-                    "Failed loading compiled YARA rules (%s); compiling %s from source",
+                    "Failed loading compiled YARA-X rules (%s); compiling %s from source",
                     e,
                     YARA_PATH,
                 )
-                return yara_compile(filepath=YARA_PATH)
+                return yara_x.compile(Path(YARA_PATH).read_text(encoding="utf-8"))
             except Exception as compile_err:
                 raise RuntimeError(
                     f"Error loading or compiling bundled yara rule - Check {compiled_rule_path} or run with -r/--recompile and retry"
